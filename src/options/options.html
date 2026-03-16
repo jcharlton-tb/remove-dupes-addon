@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Remove Duplicate Messages - Settings</title>
+  <style>
+    body {
+      font: message-box;
+      margin: 20px;
+      max-width: 760px;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      margin-bottom: 16px;
+    }
+
+    h2 {
+      font-size: 1.05rem;
+      margin-top: 24px;
+      margin-bottom: 10px;
+    }
+
+    fieldset {
+      border: 1px solid #cfcfd4;
+      padding: 14px 16px;
+      margin: 0 0 16px 0;
+    }
+
+    legend {
+      font-weight: 600;
+      padding: 0 6px;
+    }
+
+    .row {
+      margin: 10px 0;
+    }
+
+    .indent {
+      margin-left: 26px;
+    }
+
+    .note {
+      color: #555;
+      font-size: 0.95em;
+    }
+
+    .actions {
+      margin-top: 20px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    #status {
+      color: #0a6b2d;
+    }
+  </style>
+</head>
+<body>
+  <h1>Remove Duplicate Messages - Settings</h1>
+
+  <fieldset>
+    <legend>General Settings</legend>
+
+    <div class="row">
+      <label>
+        <input type="checkbox" id="skipSpecialFolders" />
+        Skip Special Folders (Sent, Drafts etc.)
+      </label>
+    </div>
+
+    <div class="row">
+      <label>
+        <input type="checkbox" id="skipImapDeleted" />
+        Skip IMAP messages marked "Deleted"
+      </label>
+    </div>
+
+    <div class="row">
+      <label>
+        <input type="checkbox" id="searchSubfolders" />
+        Search subfolders of selected top folder(s)
+      </label>
+    </div>
+
+    <div class="row">
+      <label>
+        <input type="checkbox" id="reviewBeforeDeletion" />
+        Review search results before deletion
+      </label>
+    </div>
+
+    <div class="row">
+      <div><strong>Default action for duplicate messages:</strong></div>
+    </div>
+
+    <div class="row indent">
+      <label>
+        <input type="radio" name="defaultAction" value="trash" />
+        Move to Trash
+      </label>
+    </div>
+
+    <div class="row indent">
+      <label>
+        <input type="radio" name="defaultAction" value="permanent" />
+        Delete permanently
+      </label>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Message Comparison</legend>
+
+    <div class="row">
+      <label><input type="checkbox" id="compareSubject" /> Subject</label>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="compareAuthor" /> Author</label>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="compareRecipients" /> Recipients</label>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="compareCc" /> CC</label>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="compareSendTime" /> Send Time</label>
+    </div>
+    <div class="row indent">
+      <label for="sendTimeResolution">Send time resolution:</label>
+      <select id="sendTimeResolution">
+        <option value="second">Second</option>
+        <option value="minute">Minute</option>
+        <option value="hour">Hour</option>
+        <option value="day">Day</option>
+        <option value="month">Month</option>
+        <option value="year">Year</option>
+      </select>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="compareMessageId" /> Message ID</label>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="compareFolder" /> Folder</label>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="compareBody" /> Body</label>
+    </div>
+    <div class="row">
+      <label>
+        <input type="checkbox" id="stripAndSortAddresses" />
+        Compare addresses stripped and sorted
+      </label>
+    </div>
+    <div class="note">
+      Body comparison is more expensive and should be done after other criteria narrow the candidates.
+    </div>
+  </fieldset>
+
+  <div class="actions">
+    <button id="save">Save</button>
+    <button id="reset" type="button">Reset to Defaults</button>
+    <span id="status"></span>
+  </div>
+
+  <script src="../settings.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>
