@@ -1,3 +1,5 @@
+import { localizeDocument } from "../vendor/i18n.mjs";
+
 function setCheckbox(id, checked) {
   const el = document.getElementById(id);
   if (el) {
@@ -22,12 +24,13 @@ function getRadioValue(name) {
   return checked ? checked.value : null;
 }
 
-function setStatus(text) {
+function setStatus(messageKey) {
   const status = document.getElementById("status");
   if (!status) {
     return;
   }
 
+  const text = messageKey ? browser.i18n.getMessage(messageKey) : "";
   status.textContent = text;
 
   if (text) {
@@ -71,7 +74,7 @@ function readForm() {
     skipImapDeleted: getCheckbox("skipImapDeleted"),
     searchSubfolders: getCheckbox("searchSubfolders"),
     reviewBeforeDeletion: getCheckbox("reviewBeforeDeletion"),
-    defaultAction: getRadioValue("defaultAction") || DEFAULT_SETTINGS.defaultAction,
+    defaultAction: getRadioValue("defaultAction") || window.DEFAULT_SETTINGS.defaultAction,
 
     compareSubject: getCheckbox("compareSubject"),
     compareAuthor: getCheckbox("compareAuthor"),
@@ -85,31 +88,37 @@ function readForm() {
     stripAndSortAddresses: getCheckbox("stripAndSortAddresses"),
     sendTimeResolution: sendTimeResolution
       ? sendTimeResolution.value
-      : DEFAULT_SETTINGS.sendTimeResolution,
+      : window.DEFAULT_SETTINGS.sendTimeResolution,
   };
 }
 
 async function load() {
-  const settings = await getSettings();
+  const settings = await window.getSettings();
   populateForm(settings);
 }
 
 async function save() {
   const settings = readForm();
-  await saveSettings(settings);
-  setStatus("Saved");
+  await window.saveSettings(settings);
+  setStatus("saved");
 }
 
 async function resetToDefaults() {
-  populateForm(DEFAULT_SETTINGS);
-  await saveSettings(DEFAULT_SETTINGS);
-  setStatus("Defaults restored");
+  populateForm(window.DEFAULT_SETTINGS);
+  await window.saveSettings(window.DEFAULT_SETTINGS);
+  setStatus("defaultsRestored");
 }
 
 document.getElementById("save")?.addEventListener("click", save);
 document.getElementById("reset")?.addEventListener("click", resetToDefaults);
 
-load().catch((error) => {
-  console.error("Failed to load options:", error);
-  setStatus("Failed to load settings");
+window.addEventListener("DOMContentLoaded", async () => {
+  localizeDocument();
+
+  try {
+    await load();
+  } catch (error) {
+    console.error("Failed to load options:", error);
+    setStatus("failedToLoadSettings");
+  }
 });

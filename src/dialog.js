@@ -1,3 +1,9 @@
+import { localizeDocument } from "./vendor/i18n.mjs";
+
+window.addEventListener("DOMContentLoaded", () => {
+  localizeDocument();
+});
+
 let data = null;
 
 // default sort: highest count first
@@ -5,7 +11,7 @@ let sort = { key: "count", dir: "desc" };
 
 let renderToken = 0;
 
-function setLoading(isLoading, text = "Scanning folder…") {
+function setLoading(isLoading, text = browser.i18n.getMessage("loadingText")) {
   const loading = document.getElementById("loading");
   const loadingText = document.getElementById("loading-text");
   const resultsWrap = document.getElementById("results-wrap");
@@ -91,14 +97,17 @@ function updateHeaderLabels() {
   const subjectBtn = document.getElementById("sort-subject");
   const countBtn = document.getElementById("sort-count");
 
+  const subjectLabel = browser.i18n.getMessage("subjectColumn");
+  const countLabel = browser.i18n.getMessage("countColumn");
+
   if (subjectBtn) {
     subjectBtn.textContent =
-      "Subject" + (sort.key === "subject" ? (sort.dir === "asc" ? " ▲" : " ▼") : "");
+      subjectLabel + (sort.key === "subject" ? (sort.dir === "asc" ? " ▲" : " ▼") : "");
   }
 
   if (countBtn) {
     countBtn.textContent =
-      "Count" + (sort.key === "count" ? (sort.dir === "asc" ? " ▲" : " ▼") : "");
+      countLabel + (sort.key === "count" ? (sort.dir === "asc" ? " ▲" : " ▼") : "");
   }
 }
 
@@ -111,11 +120,16 @@ function render() {
   if (!data) {
     meta.textContent = "";
     tbody.innerHTML = "";
-    setLoading(true, "Scanning folder…");
+    setLoading(true, browser.i18n.getMessage("loadingText"));
     return;
   }
 
-  meta.textContent = `Folder: ${data.folderName} • Scanned: ${data.scannedCount} • Duplicate groups: ${data.duplicateGroupCount}`;
+  meta.textContent = browser.i18n.getMessage("scanSummary", [
+    data.folderName,
+    String(data.scannedCount),
+    String(data.duplicateGroupCount),
+  ]);
+
   setLoading(false);
 
   const rows = [...(data.rows || [])].sort((a, b) =>
@@ -139,8 +153,8 @@ async function waitForResults() {
 
     if (status.inProgress) {
       const folderText = status.folderName
-        ? `Scanning folder: ${status.folderName}…`
-        : "Scanning folder…";
+        ? browser.i18n.getMessage("loadingFolderText", status.folderName)
+        : browser.i18n.getMessage("loadingText");
 
       setLoading(true, folderText);
     }
@@ -162,18 +176,10 @@ async function init() {
   if (countBtn) countBtn.addEventListener("click", () => toggleSort("count"));
 
   render(); 
-  
-  const dlg = document.querySelector("wa-dialog");
-  if (dlg && typeof dlg.show === "function") {
-    await dlg.show();
-  }
 
   const closeBtn = document.getElementById("close");
   if (closeBtn) {
-    closeBtn.addEventListener("click", async () => {
-      if (dlg && typeof dlg.hide === "function") {
-        await dlg.hide();
-      }
+    closeBtn.addEventListener("click", () => {
       window.close();
     });
   }
@@ -186,5 +192,7 @@ init().catch((err) => {
   console.error(err);
   setLoading(false);
   const meta = document.getElementById("meta");
-  if (meta) meta.textContent = `Error: ${err?.message || err}`;
+  if (meta) {
+    meta.textContent = `${browser.i18n.getMessage("errorPrefix")} ${err?.message || err}`;
+  }
 });
