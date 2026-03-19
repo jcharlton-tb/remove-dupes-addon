@@ -84,6 +84,90 @@ async function getAllMessages(folder) {
   return allMessages;
 }
 
+function getSelectedFolders(info) {
+  if (Array.isArray(info.selectedFolders) && info.selectedFolders.length > 0) {
+    return info.selectedFolders;
+  }
+
+  if (info.selectedFolder) {
+    return [info.selectedFolder];
+  }
+
+  return [];
+}
+
+async function collectFolders(rootFolder, includeSubfolders) {
+  const folders = [rootFolder];
+
+  if (!includeSubfolders || !Array.isArray(rootFolder.subFolders)) {
+    return folders;
+  }
+
+  for (const subFolder of rootFolder.subFolders) {
+    const nested = await collectFolders(subFolder, true);
+    folders.push(...nested);
+  }
+
+  return folders;
+}
+
+function dedupeFolders(folders) {
+  const seen = new Set();
+  const unique = [];
+
+  for (const folder of folders) {
+    const key = folder.path || folder.name;
+
+    if (!key || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    unique.push(folder);
+  }
+
+  return unique;
+}
+
+function shouldSkipFolder(folder, settings) {
+  if (!folder) {
+    return true;
+  }
+
+  if (folder.isRoot === true) {
+    return true;
+  }
+
+  if (folder.type === "newsgroup" || folder.isServer) {
+    return true;
+  }
+
+  if (folder.type === "virtual") {
+    return true;
+  }
+
+  if (settings.skipSpecialFolders) {
+    const specialTypes = new Set([
+      "trash",
+      "sent",
+      "drafts",
+      "templates",
+      "archives",
+      "junk",
+      "outbox",
+    ]);
+
+    if (folder.type !== "inbox" && specialTypes.has(folder.type)) {
+      return true;
+    }
+  }
+
+  console.log("Folder type:", folder.name, folder.type);
+
+  return false;
+}
+
+
 // Async per entry processing
 const ENTRY_CONCURRENCY = 8;
 
@@ -111,9 +195,147 @@ function normalizeSubject(subject) {
     .toLowerCase();
 }
 
-async function getNormalizedSubjectAsync(message) {
+function normalizeAddressList(addresses, stripAndSort) {
+  const list = Array.isArray(addresses) ? addresses : [];
+
+  const normalized = list
+    .map((entry) => {
+      if (!entry) {
+        return "";
+      }
+
+      const text = String(entry).trim().toLowerCase();
+
+      if (!stripAndSort) {
+        return text;
+      }
+
+      const match = text.match(/<([^>]+)>/);
+      return match ? match[1].trim() : text;
+    })
+    .filter(Boolean);
+
+  if (stripAndSort) {
+    normalized.sort();
+  }
+
+  return normalized.join(",");
+}
+
+function buildSendTimeKey(dateValue, resolution) {
+  if (!dateValue) {
+    return "";
+  }
+
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  const second = String(Math.floor(date.getTime() / 1000));
+
+  switch (resolution) {
+    case "year":
+      return year;
+    case "month":
+      return `${year}-${month}`;
+    case "day":
+      return `${year}-${month}-${day}`;
+    case "hour":
+      return `${year}-${month}-${day} ${hour}`;
+    case "minute":
+      return `${year}-${month}-${day} ${hour}:${minute}`;
+    case "second":
+    default:
+      return second;
+  }
+}
+
+function extractBodyText(part) {
+  if (!part) {
+    return "";
+  }
+
+  if (Array.isArray(part.parts) && part.parts.length > 0) {
+    return part.parts.map(extractBodyText).join(" ");
+  }
+
+  return part.body || "";
+}
+
+function normalizeBody(text) {
+  return String(text || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+async function getComparisonData(message, settings) {
   const hdr = await browser.messages.get(message.id);
-  return normalizeSubject(hdr.subject);
+  const parts = [];
+  let fullMessage = null;
+
+  if (settings.compareSubject) {
+    parts.push(`subject:${normalizeSubject(hdr.subject)}`);
+  }
+
+  if (settings.compareAuthor) {
+    parts.push(`author:${String(hdr.author || "").trim().toLowerCase()}`);
+  }
+
+  if (settings.compareRecipients) {
+    parts.push(
+      `recipients:${normalizeAddressList(
+        hdr.recipients,
+        settings.stripAndSortAddresses
+      )}`
+    );
+  }
+
+  if (settings.compareCc) {
+    parts.push(
+      `cc:${normalizeAddressList(
+        hdr.ccList,
+        settings.stripAndSortAddresses
+      )}`
+    );
+  }
+
+  if (settings.compareSendTime) {
+    parts.push(`date:${buildSendTimeKey(hdr.date, settings.sendTimeResolution)}`);
+  }
+
+  if (settings.compareMessageId) {
+    parts.push(
+      `messageId:${String(hdr.headerMessageId || hdr.messageId || "")
+        .trim()
+        .toLowerCase()}`
+    );
+  }
+
+  if (settings.compareFolder) {
+    parts.push(
+      `folder:${String(message.folder?.path || message.folder?.name || "")
+        .trim()
+        .toLowerCase()}`
+    );
+  }
+
+  if (settings.compareBody) {
+    fullMessage = await browser.messages.getFull(message.id);
+    parts.push(`body:${normalizeBody(extractBodyText(fullMessage))}`);
+  }
+
+  return {
+    id: message.id,
+    subject: String(hdr.subject || "(no subject)"),
+    key: parts.join("|"),
+  };
 }
 
 // Cache for dialog window
@@ -170,20 +392,45 @@ browser.menus.onClicked.addListener(async (info) => {
   }
 
   const toolbarItem = getToolbarComparisonItem(info.menuItemId);
-  if (toolbarItem) {
-    await window.saveSettings({
-  [toolbarItem.key]: info.checked,
-});
-    return;
+    if (toolbarItem) {
+      await window.saveSettings({
+        [toolbarItem.key]: info.checked,
+      });
+      return;
   }
 
   if (info.menuItemId !== "log-duplicates") return;
 
-  const folder =
-    (info.selectedFolders && info.selectedFolders[0]) || info.selectedFolder;
+  const selectedFolders = getSelectedFolders(info);
+    if (selectedFolders.length === 0) return;
 
-  if (!folder) return;
-  currentScanFolderName = folder.name; 
+  const settings = await window.getSettings();
+
+  let foldersToScan = [];
+  for (const folder of selectedFolders) {
+    const collected = await collectFolders(folder, settings.searchSubfolders);
+    foldersToScan.push(...collected);
+  }
+
+foldersToScan = dedupeFolders(foldersToScan);
+foldersToScan = foldersToScan.filter((folder) => !shouldSkipFolder(folder, settings));
+
+  if (foldersToScan.length === 0) return;
+
+currentScanFolderName =
+  foldersToScan.length === 1
+    ? foldersToScan[0].name
+    : `${foldersToScan[0].name} + ${foldersToScan.length - 1} more`;
+
+  const hasAnyCriteria =
+  settings.compareSubject ||
+  settings.compareAuthor ||
+  settings.compareRecipients ||
+  settings.compareCc ||
+  settings.compareSendTime ||
+  settings.compareMessageId ||
+  settings.compareFolder ||
+  settings.compareBody;
 
   // reset scan state
   scanInProgress = true;
@@ -199,44 +446,105 @@ browser.menus.onClicked.addListener(async (info) => {
   });
 
   try {
-    console.log("Scanning folder:", folder.name);
+    console.log(
+      "Scanning folders:",
+      foldersToScan.map((folder) => folder.name)
+    );
 
-    const allMessages = await getAllMessages(folder);
+    let allMessages = [];
 
-  // Asynchronous entry processing
-  const subjects = await mapWithConcurrency(
-    allMessages,
-    ENTRY_CONCURRENCY,
-    async (message) => {
-      try {
-        return await getNormalizedSubjectAsync(message);
-      } catch (e) {
-        console.warn("Failed to process message", message.id, e);
-        return "(error)";
+      for (const folder of foldersToScan) {
+      const messages = await getAllMessages(folder);
+
+      let filtered = messages
+
+      if (settings.skipImapDeleted) {
+        filtered = filtered.filter(
+          (message) => !(Array.isArray(message.flags) && message.flags.includes("deleted"))
+        );
       }
-    }
-  );
 
-  // Subject counts
-  const subjectCounts = {};
-  for (const subject of subjects) {
-    if (subject === "(error)") continue;
-    subjectCounts[subject] = (subjectCounts[subject] || 0) + 1;
+      switch (settings.searchScope) {
+        case "unread":
+        filtered = messages.filter((message) => !message.read);
+        break;
+        case "all":
+        default:
+        filtered = messages;
+        break;
+      }
+
+      allMessages.push(...filtered);
+      }
+
+    if (!hasAnyCriteria) {
+      lastScanResults = {
+        folderName:
+        foldersToScan.length === 1
+          ? foldersToScan[0].name
+          : `${foldersToScan.length} folders`,
+        scannedCount: allMessages.length,
+        duplicateGroupCount: 0,
+        rows: [],
+        noCriteriaSelected: true,
+     };
+
+      return;
+    }
+
+  const comparisons = await mapWithConcurrency(
+  allMessages,
+  ENTRY_CONCURRENCY,
+  async (message) => {
+    try {
+      return await getComparisonData(message, settings);
+    } catch (e) {
+      console.warn("Failed to process message", message.id, e);
+      return null;
+    }
+  }
+);
+
+const groups = new Map();
+
+for (const item of comparisons) {
+  if (!item || !item.key) {
+    continue;
   }
 
-  // Convert to rows with only dupes
-  const rows = Object.entries(subjectCounts)
-    .filter(([, count]) => count > 1)
-    .map(([subject, count]) => ({ subject, count }))
-    .sort((a, b) => b.count - a.count);
+  if (!groups.has(item.key)) {
+    groups.set(item.key, {
+      subject: item.subject,
+      count: 0,
+      messageIds: [],
+    });
+  }
+
+  const group = groups.get(item.key);
+  group.count += 1;
+  group.messageIds.push(item.id);
+}
+
+const rows = [...groups.values()]
+  .filter((group) => group.count > 1)
+  .map((group) => ({
+    subject: group.subject,
+    count: group.count,
+    messageIds: group.messageIds,
+  }))
+  .sort((a, b) => b.count - a.count);
 
   // Cache results for the dialog.js popup
     lastScanResults = {
-      folderName: folder.name,
+      folderName:
+      foldersToScan.length === 1
+      ? foldersToScan[0].name
+      : `${foldersToScan.length} folders`,
       scannedCount: allMessages.length,
       duplicateGroupCount: rows.length,
       rows,
     };
+
   } catch (err) {
     console.error("Scan failed:", err);
     lastScanError = String(err);

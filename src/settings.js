@@ -16,6 +16,8 @@ const DEFAULT_SETTINGS = {
   
     stripAndSortAddresses: true,
     sendTimeResolution: "minute", 
+
+    searchScope: "all"
   };
   
   async function getSettings() {

@@ -178,5 +178,13 @@
 
     "errorPrefix": {
       "message": "Error:"
+    },
+
+    "noResults": {
+      "message": "No duplicate messages found."
+    },
+
+    "noCriteriaSelected": {
+      "message": "No comparison criteria selected."
     }
   }
