@@ -63,7 +63,6 @@ function renderRowsChunked(tbody, rows, chunkSize = 1, token) {
     }
   }
 
-  console.log("rows.length =", rows.length);
   requestAnimationFrame(appendChunk);
 
 }
@@ -124,7 +123,7 @@ function render() {
     return;
   }
 
-  meta.textContent = browser.i18n.getMessage("scanSummary", [
+   meta.textContent = browser.i18n.getMessage("scanSummary", [
     data.folderName,
     String(data.scannedCount),
     String(data.duplicateGroupCount),
@@ -135,6 +134,30 @@ function render() {
   const rows = [...(data.rows || [])].sort((a, b) =>
     compareRows(a, b, sort.key, sort.dir)
   );
+
+  if (data.noCriteriaSelected) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="2" style="text-align:center; padding: 16px;">
+          ${browser.i18n.getMessage("noCriteriaSelected")}
+        </td>
+      </tr>
+    `;
+    updateHeaderLabels();
+    return;
+  }
+
+  if (rows.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="2" style="text-align:center; padding: 16px;">
+          ${browser.i18n.getMessage("noResults")}
+        </td>
+      </tr>
+    `;
+    updateHeaderLabels();
+    return;
+  }
 
   updateHeaderLabels();
 
