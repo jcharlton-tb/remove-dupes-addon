@@ -14,6 +14,18 @@ browser.menus.create({
   contexts: ["tools_menu"],
 });
 
+browser.menus.create({
+  id: "tools-remove-duplicates",
+  title: browser.i18n.getMessage("originalsFolderMenu"),
+  contexts: ["tools_menu"],
+});
+
+browser.menus.create({
+  id: "set-originals-folder",
+  title: browser.i18n.getMessage("originalsFolderMenu"),
+  contexts: ["folder_pane"],
+});
+
 // settings menu
 const TOOLBAR_COMPARISON_ITEMS = [
   { id: "toggle-compare-subject", titleKey: "compareSubjectMenu", key: "compareSubject" },
@@ -74,6 +86,11 @@ browser.menus.onShown.addListener(async (info) => {
     visible: true,
   });
 
+  await browser.menus.update("set-originals-folder", {
+  enabled: !shouldDisable,
+  visible: true,
+  });
+
 browser.menus.refresh();
 });
 
@@ -88,6 +105,10 @@ async function getAllMessages(folder) {
   }
 
   return allMessages;
+}
+
+function setOriginalsFolders(folders) {
+  originalsFolders = Array.isArray(folders) ? folders : [];
 }
 
 function getSelectedFolders(info) {
@@ -353,6 +374,7 @@ let lastScanResults = null;
 let scanInProgress = false;
 let lastScanError = null;
 let currentScanFolderName = null;
+let originalsFolders = [];
 
 
 browser.runtime.onMessage.addListener((msg) => {
@@ -534,6 +556,7 @@ async function runDuplicateScan(selectedFolders) {
         author: group.author,
         folder: group.folder,
         date: group.date,
+        dateValue: group.dateValue,
         count: group.count,
         messageIds: group.messageIds,
       }))
@@ -547,6 +570,7 @@ async function runDuplicateScan(selectedFolders) {
       scannedCount: allMessages.length,
       duplicateGroupCount: rows.length,
       rows,
+      noDuplicatesFound: rows.length === 0,
     };
   } catch (err) {
     console.error("Scan failed:", err);
@@ -578,6 +602,24 @@ browser.menus.onClicked.addListener(async (info) => {
       await runDuplicateScan(selectedFolders);
     } catch (err) {
       console.error("Tools menu scan failed:", err);
+    }
+    return;
+  }
+
+    if (info.menuItemId === "set-originals-folder") {
+    const selectedFolders = getSelectedFolders(info);
+    setOriginalsFolders(selectedFolders);
+    console.log("Originals folders set:", selectedFolders.map((folder) => folder.name));
+    return;
+  }
+
+  if (info.menuItemId === "tools-set-originals-folder") {
+    try {
+      const selectedFolders = await browser.mailTabs.getSelectedFolders();
+      setOriginalsFolders(selectedFolders);
+      console.log("Originals folders set:", selectedFolders.map((folder) => folder.name));
+    } catch (err) {
+      console.error("Failed to set originals folders from Tools menu:", err);
     }
     return;
   }

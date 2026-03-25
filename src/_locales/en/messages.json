@@ -218,5 +218,17 @@
     
     "searchScopeUnread": {
       "message": "Scope: Unread messages only"
-    }    
+    },
+    
+    "noDuplicatesFoundAlert": {
+      "message": "No duplicate messages found."
+    },
+
+    "originalsFolderMenu": {
+      "message": "Set as Originals Folder"
+    },
+
+    "originalsFolderSet": {
+      "message": "Originals folder set for next search."
+    }
   }
