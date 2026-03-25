@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Remove Duplicate Messages - Settings</title>
+  <title data-i18n-content="optionsTitle">Find and Remove Duplicate Messages - Settings</title>
   <style>
     body {
       font: message-box;
@@ -58,114 +58,163 @@
   </style>
 </head>
 <body>
-  <h1>Remove Duplicate Messages - Settings</h1>
+  <h1 data-i18n-content="optionsTitle">Find and Remove Duplicate Messages - Settings</h1>
 
   <fieldset>
-    <legend>General Settings</legend>
+    <legend data-i18n-content="generalSettingsLegend">General Settings</legend>
 
     <div class="row">
       <label>
         <input type="checkbox" id="skipSpecialFolders" />
+        <span data-i18n-content="skipSpecialFolders">
         Skip Special Folders (Sent, Drafts etc.)
+        </span>
       </label>
     </div>
 
     <div class="row">
       <label>
         <input type="checkbox" id="skipImapDeleted" />
+        <span data-i18n-content="skipImapDeleted">
         Skip IMAP messages marked "Deleted"
+        </span>
       </label>
     </div>
 
     <div class="row">
       <label>
         <input type="checkbox" id="searchSubfolders" />
+        <span data-i18n-content="searchSubfolders">
         Search subfolders of selected top folder(s)
+        </span>
       </label>
     </div>
 
     <div class="row">
       <label>
         <input type="checkbox" id="reviewBeforeDeletion" />
+        <span data-i18n-content="reviewBeforeDeletion">
         Review search results before deletion
+        </span>
       </label>
     </div>
 
     <div class="row">
-      <div><strong>Default action for duplicate messages:</strong></div>
+      <div><strong data-i18n-content="defaultActionLabel">Default action for duplicate messages:</strong></div>
     </div>
 
     <div class="row indent">
       <label>
         <input type="radio" name="defaultAction" value="trash" />
+        <span data-i18n-content="moveToTrash">
         Move to Trash
+        </span>
       </label>
     </div>
 
     <div class="row indent">
       <label>
         <input type="radio" name="defaultAction" value="permanent" />
+        <span data-i18n-content="deletePermanently">
         Delete permanently
+        </span>
       </label>
     </div>
   </fieldset>
 
   <fieldset>
-    <legend>Message Comparison</legend>
+    <legend data-i18n-content="messageComparisonLegend">Message Comparison</legend>
 
     <div class="row">
-      <label><input type="checkbox" id="compareSubject" /> Subject</label>
+      <label>
+        <input type="checkbox" id="compareSubject" /> 
+        <span data-i18n-content="subject">Subject</span>
+      </label>
     </div>
+
     <div class="row">
-      <label><input type="checkbox" id="compareAuthor" /> Author</label>
+      <label>
+        <input type="checkbox" id="compareAuthor" />
+        <span data-i18n-content="author">Author</span>
+      </label>
     </div>
+
     <div class="row">
-      <label><input type="checkbox" id="compareRecipients" /> Recipients</label>
+      <label>
+        <input type="checkbox" id="compareRecipients" />
+        <span data-i18n-content="recipients">Recipients</span>
+      </label>
     </div>
+
     <div class="row">
-      <label><input type="checkbox" id="compareCc" /> CC</label>
+      <label>
+        <input type="checkbox" id="compareCc" />
+        <span data-i18n-content="cc">CC</span>
+      </label>
     </div>
+
     <div class="row">
-      <label><input type="checkbox" id="compareSendTime" /> Send Time</label>
+      <label>
+        <input type="checkbox" id="compareSendTime" />
+        <span data-i18n-content="sendTime">Send Time</span>
+      </label>
     </div>
+
     <div class="row indent">
-      <label for="sendTimeResolution">Send time resolution:</label>
+      <label for="sendTimeResolution" data-i18n-content="sendTimeResolution">
+        Send time resolution:
+      </label>
+    
       <select id="sendTimeResolution">
-        <option value="second">Second</option>
-        <option value="minute">Minute</option>
-        <option value="hour">Hour</option>
-        <option value="day">Day</option>
-        <option value="month">Month</option>
-        <option value="year">Year</option>
+        <option value="second" data-i18n-content="second">Second</option>
+        <option value="minute" data-i18n-content="minute">Minute</option>
+        <option value="hour" data-i18n-content="hour">Hour</option>
+        <option value="day" data-i18n-content="day">Day</option>
+        <option value="month" data-i18n-content="month">Month</option>
+        <option value="year" data-i18n-content="year">Year</option>
       </select>
     </div>
+
     <div class="row">
-      <label><input type="checkbox" id="compareMessageId" /> Message ID</label>
+      <label>
+        <input type="checkbox" id="compareMessageId" />
+        <span data-i18n-content="messageId">Message ID</span>
+      </label>
     </div>
+
     <div class="row">
-      <label><input type="checkbox" id="compareFolder" /> Folder</label>
+      <label>
+        <input type="checkbox" id="compareFolder" />
+        <span data-i18n-content="folder">Folder</span>
+      </label>
     </div>
+
     <div class="row">
-      <label><input type="checkbox" id="compareBody" /> Body</label>
+      <label>
+        <input type="checkbox" id="compareBody" />
+        <span data-i18n-content="body">Body</span>
+      </label>
     </div>
+
     <div class="row">
       <label>
         <input type="checkbox" id="stripAndSortAddresses" />
-        Compare addresses stripped and sorted
+        <span data-i18n-content="stripAndSortAddresses">Compare addresses stripped and sorted</span>
       </label>
     </div>
-    <div class="note">
+
+    <div class="note" data-i18n-content="bodyComparisonNote">
       Body comparison is more expensive and should be done after other criteria narrow the candidates.
     </div>
   </fieldset>
 
   <div class="actions">
-    <button id="save">Save</button>
-    <button id="reset" type="button">Reset to Defaults</button>
+    <button id="save" data-i18n-content="save">Save</button>
+    <button id="reset" type="button" data-i18n-content="resetToDefaults">Reset to Defaults</button>
     <span id="status"></span>
   </div>
 
   <script src="../settings.js"></script>
-  <script src="options.js"></script>
+  <script type="module" src="options.js"></script>
 </body>
 </html>

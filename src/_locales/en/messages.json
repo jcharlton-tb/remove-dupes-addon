@@ -1,0 +1,182 @@
+{
+    "extensionName": {
+      "message": "Find and Remove Duplicate Messages"
+    },
+    "extensionDescription": {
+      "message": "Scans for duplicate messages and allows you to remove them."
+    },
+  
+    "optionsTitle": {
+      "message": "Remove Duplicate Messages - Settings"
+    },
+    "generalSettingsLegend": {
+      "message": "General Settings"
+    },
+    "skipSpecialFolders": {
+      "message": "Skip Special Folders (Sent, Drafts etc.)"
+    },
+    "skipImapDeleted": {
+      "message": "Skip IMAP messages marked \"Deleted\""
+    },
+    "searchSubfolders": {
+      "message": "Search subfolders of selected top folder(s)"
+    },
+    "reviewBeforeDeletion": {
+      "message": "Review search results before deletion"
+    },
+    "defaultActionLabel": {
+      "message": "Default action for duplicate messages:"
+    },
+    "moveToTrash": {
+      "message": "Move to Trash"
+    },
+    "deletePermanently": {
+      "message": "Delete permanently"
+    },
+    "messageComparisonLegend": {
+      "message": "Message Comparison"
+    },
+    "subject": {
+      "message": "Subject"
+    },
+    "author": {
+      "message": "Author"
+    },
+    "recipients": {
+      "message": "Recipients"
+    },
+    "cc": {
+      "message": "CC"
+    },
+    "sendTime": {
+      "message": "Send Time"
+    },
+    "sendTimeResolution": {
+      "message": "Send time resolution:"
+    },
+    "second": {
+      "message": "Second"
+    },
+    "minute": {
+      "message": "Minute"
+    },
+    "hour": {
+      "message": "Hour"
+    },
+    "day": {
+      "message": "Day"
+    },
+    "month": {
+      "message": "Month"
+    },
+    "year": {
+      "message": "Year"
+    },
+    "messageId": {
+      "message": "Message ID"
+    },
+    "folder": {
+      "message": "Folder"
+    },
+    "body": {
+      "message": "Body"
+    },
+    "stripAndSortAddresses": {
+      "message": "Compare addresses stripped and sorted"
+    },
+    "bodyComparisonNote": {
+      "message": "Body comparison is more expensive and should be done after other criteria narrow the candidates."
+    },
+    "save": {
+      "message": "Save"
+    },
+    "resetToDefaults": {
+      "message": "Reset to Defaults"
+    },
+    "saved": {
+      "message": "Saved"
+    },
+    "defaultsRestored": {
+      "message": "Defaults restored"
+    },
+    "failedToLoadSettings": {
+      "message": "Failed to load settings"
+    },
+
+    "dialogTitle": {
+      "message": "Duplicate Scan Results"
+    },
+    "loadingText": {
+      "message": "Scanning folder…"
+    },
+    "subjectColumn": {
+      "message": "Subject"
+    },
+    "countColumn": {
+      "message": "Count"
+    },
+    "close": {
+      "message": "Close"
+    },
+    "loadingAlt": {
+      "message": "Loading"
+    }
+    ,
+    
+    "scanForDupesMenu": {
+      "message": "Scan for dupes (show table)"
+    },
+  
+    "toolbarOptions": {
+      "message": "Options"
+    },
+
+    "compareSubjectMenu": {
+      "message": "Compare Subject"
+    },
+
+    "compareAuthorMenu": {
+      "message": "Compare Author"
+    },
+
+    "compareRecipientsMenu": {
+      "message": "Compare Recipients"
+    },
+
+    "compareCcMenu": {
+      "message": "Compare CC"
+    },
+
+    "compareSendTimeMenu": {
+      "message": "Compare Send Time"
+    },
+
+    "compareMessageIdMenu": {
+      "message": "Compare Message ID"
+    },
+  
+    "compareFolderMenu": {
+      "message": "Compare Folder"
+    },
+
+    "compareBodyMenu": {
+      "message": "Compare Body"
+    },
+
+    "loadingFolderText": {
+      "message": "Scanning folder: $folderName$…",
+      "placeholders": {
+      "folderName": {
+        "content": "$1"
+      }
+      }
+    },
+    
+    "scanSummary": {
+      "message": "Folder: $1$ • Scanned: $2$ • Duplicate groups: $3$"
+    },
+
+    "errorPrefix": {
+      "message": "Error:"
+    }
+  }

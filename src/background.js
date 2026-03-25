@@ -4,20 +4,20 @@ console.log("RemoveDupes background loaded");
 // Menu item
 browser.menus.create({
   id: "log-duplicates",
-  title: "Scan for dupes (show table)",
+  title: browser.i18n.getMessage("scanForDupesMenu"),
   contexts: ["folder_pane"],
 });
 
 // settings menu
 const TOOLBAR_COMPARISON_ITEMS = [
-  { id: "toggle-compare-subject", title: "Compare Subject", key: "compareSubject" },
-  { id: "toggle-compare-author", title: "Compare Author", key: "compareAuthor" },
-  { id: "toggle-compare-recipients", title: "Compare Recipients", key: "compareRecipients" },
-  { id: "toggle-compare-cc", title: "Compare CC", key: "compareCc" },
-  { id: "toggle-compare-send-time", title: "Compare Send Time", key: "compareSendTime" },
-  { id: "toggle-compare-message-id", title: "Compare Message ID", key: "compareMessageId" },
-  { id: "toggle-compare-folder", title: "Compare Folder", key: "compareFolder" },
-  { id: "toggle-compare-body", title: "Compare Body", key: "compareBody" },
+  { id: "toggle-compare-subject", titleKey: "compareSubjectMenu", key: "compareSubject" },
+  { id: "toggle-compare-author", titleKey: "compareAuthorMenu", key: "compareAuthor" },
+  { id: "toggle-compare-recipients", titleKey: "compareRecipientsMenu", key: "compareRecipients" },
+  { id: "toggle-compare-cc", titleKey: "compareCcMenu", key: "compareCc" },
+  { id: "toggle-compare-send-time", titleKey: "compareSendTimeMenu", key: "compareSendTime" },
+  { id: "toggle-compare-message-id", titleKey: "compareMessageIdMenu", key: "compareMessageId" },
+  { id: "toggle-compare-folder", titleKey: "compareFolderMenu", key: "compareFolder" },
+  { id: "toggle-compare-body", titleKey: "compareBodyMenu", key: "compareBody" },
 ];
 
 function getToolbarComparisonItem(menuItemId) {
@@ -25,11 +25,11 @@ function getToolbarComparisonItem(menuItemId) {
 }
 
 async function createToolbarMenus() {
-  const settings = await getSettings();
+  const settings = await window.getSettings();
 
   browser.menus.create({
     id: "open-options",
-    title: "Options",
+    title: browser.i18n.getMessage("toolbarOptions"),
     contexts: ["browser_action"],
   });
 
@@ -42,7 +42,7 @@ async function createToolbarMenus() {
   for (const item of TOOLBAR_COMPARISON_ITEMS) {
     browser.menus.create({
       id: item.id,
-      title: item.title,
+      title: browser.i18n.getMessage(item.titleKey),
       type: "checkbox",
       checked: settings[item.key],
       contexts: ["browser_action"],
@@ -171,9 +171,9 @@ browser.menus.onClicked.addListener(async (info) => {
 
   const toolbarItem = getToolbarComparisonItem(info.menuItemId);
   if (toolbarItem) {
-    await saveSettings({
-      [toolbarItem.key]: info.checked,
-    });
+    await window.saveSettings({
+  [toolbarItem.key]: info.checked,
+});
     return;
   }
 
