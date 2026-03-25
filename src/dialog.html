@@ -140,6 +140,38 @@
       color: #006fe0;
       background: transparent;
     }
+
+    wa-button[variant="text"][data-static]::part(base) {
+      cursor: default;
+      opacity: 0.8;
+    }
+
+    wa-button[variant="text"]::part(base) {
+      background: transparent !important;
+    }
+
+    th wa-button {
+      display: block;
+      width: 100%;
+    }
+
+    wa-button[variant="text"]::part(base) {
+      width: 100%;
+      justify-content: flex-start;
+      background: transparent !important;
+      border: none;
+      box-shadow: none; 
+    }
+ 
+    wa-button.active-criterion::part(base) {
+      background: #dce9ff !important;
+      font-weight: 700;
+    }
+    
+    .active-criterion {
+      background: #dce9ff !important;
+      font-weight: 700;
+    }    
   </style>
 </head>
 
@@ -148,6 +180,7 @@
     <div class="header">
       <h1 class="title" data-i18n-content="dialogTitle">Duplicate Scan Results</h1>
       <p class="meta" id="meta"></p>
+      <p class="meta" id="scan-summary"></p>
     </div>
 
     <div id="loading" class="loading">
@@ -166,14 +199,33 @@
         <thead>
           <tr>
             <th id="th-subject">
-              <wa-button variant="text" size="small" id="sort-subject" data-i18n-content="subjectColumn">
-                Subject
-              </wa-button>
+            <wa-button variant="text" size="small" id="sort-subject" data-i18n-content="subjectColumn">
+              Subject
+            </wa-button>
             </th>
+
+            <th id="th-author">
+            <wa-button variant="text" size="small" id="sort-author">
+            Author
+            </wa-button>
+            </th>
+
+            <th id="th-folder">
+            <wa-button variant="text" size="small" id="sort-folder">
+            Folder
+            </wa-button>
+            </th>
+
+            <th id="th-date">
+            <wa-button variant="text" size="small" id="sort-date">
+            Date
+            </wa-button>
+            </th>
+
             <th id="th-count" class="count" aria-sort="none">
-              <wa-button variant="text" size="small" id="sort-count" data-i18n-content="countColumn">
-                Count
-              </wa-button>
+            <wa-button variant="text" size="small" id="sort-count" data-i18n-content="countColumn">
+              Count
+            </wa-button>
             </th>
           </tr>
         </thead>

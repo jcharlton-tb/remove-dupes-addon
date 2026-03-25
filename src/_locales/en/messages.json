@@ -186,5 +186,49 @@
 
     "noCriteriaSelected": {
       "message": "No comparison criteria selected."
+    },
+
+    "runDuplicateScanCommand": {
+      "message": "Run duplicate scan"
+    },
+
+    "removeDuplicatesMenu": {
+      "message": "Remove Duplicates"
+    },
+
+    "authorColumn": {
+      "message": "Author"
+    },
+
+    "folderColumn": {
+      "message": "Folder"
+    },
+
+    "dateColumn": {
+      "message": "Date"
+    },
+
+    "scanSummaryLabel": {
+      "message": "Comparing:"
+    },
+
+    "searchScopeAll": {
+      "message": "Scope: All messages"
+    },
+    
+    "searchScopeUnread": {
+      "message": "Scope: Unread messages only"
+    },
+    
+    "noDuplicatesFoundAlert": {
+      "message": "No duplicate messages found."
+    },
+
+    "originalsFolderMenu": {
+      "message": "Set as Originals Folder"
+    },
+
+    "originalsFolderSet": {
+      "message": "Originals folder set for next search."
     }
   }
