@@ -192,8 +192,17 @@ async function render() {
         ? browser.i18n.getMessage("searchScopeUnread")
         : browser.i18n.getMessage("searchScopeAll");
 
-    scanSummary.textContent =
-      `${browser.i18n.getMessage("scanSummaryLabel")} ${enabled.join(", ")} • ${scope}`;
+    let summaryText =
+    `${browser.i18n.getMessage("scanSummaryLabel")} ${enabled.join(", ")} • ${scope}`;
+
+    if (Array.isArray(data.originalsFolderNames) && data.originalsFolderNames.length > 0) {
+      summaryText += ` • ${browser.i18n.getMessage(
+      "originalsFoldersUsed",
+      data.originalsFolderNames.join(", ")
+    )}`;
+  }
+
+scanSummary.textContent = summaryText;
   }
 
   if (data.noCriteriaSelected) {
