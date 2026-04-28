@@ -1,10 +1,28 @@
 // background.js
 console.log("RemoveDupes background loaded");
 
-// Menu item
+// Menu items
 browser.menus.create({
   id: "log-duplicates",
-  title: browser.i18n.getMessage("scanForDupesMenu"),
+  title: browser.i18n.getMessage("removeDuplicatesMenu"),
+  contexts: ["folder_pane"],
+});
+
+browser.menus.create({
+  id: "tools-remove-duplicates",
+  title: browser.i18n.getMessage("removeDuplicatesMenu"),
+  contexts: ["tools_menu"],
+});
+
+browser.menus.create({
+  id: "tools-remove-duplicates",
+  title: browser.i18n.getMessage("originalsFolderMenu"),
+  contexts: ["tools_menu"],
+});
+
+browser.menus.create({
+  id: "set-originals-folder",
+  title: browser.i18n.getMessage("originalsFolderMenu"),
   contexts: ["folder_pane"],
 });
 
@@ -68,7 +86,12 @@ browser.menus.onShown.addListener(async (info) => {
     visible: true,
   });
 
-  browser.menus.refresh();
+  await browser.menus.update("set-originals-folder", {
+  enabled: !shouldDisable,
+  visible: true,
+  });
+
+browser.menus.refresh();
 });
 
 
@@ -82,6 +105,10 @@ async function getAllMessages(folder) {
   }
 
   return allMessages;
+}
+
+function setOriginalsFolders(folders) {
+  originalsFolders = Array.isArray(folders) ? folders : [];
 }
 
 function getSelectedFolders(info) {
@@ -332,10 +359,14 @@ async function getComparisonData(message, settings) {
   }
 
   return {
-    id: message.id,
-    subject: String(hdr.subject || "(no subject)"),
-    key: parts.join("|"),
-  };
+  id: message.id,
+  subject: String(hdr.subject || "(no subject)"),
+  author: String(hdr.author || ""),
+  folder: String(message.folder?.name || message.folder?.path || ""),
+  date: hdr.date ? new Date(hdr.date).toLocaleString() : "",
+  dateValue: hdr.date ? new Date(hdr.date).getTime() : 0,
+  key: parts.join("|"),
+};
 }
 
 // Cache for dialog window
@@ -343,6 +374,7 @@ let lastScanResults = null;
 let scanInProgress = false;
 let lastScanError = null;
 let currentScanFolderName = null;
+let originalsFolders = [];
 
 
 browser.runtime.onMessage.addListener((msg) => {
@@ -358,6 +390,10 @@ browser.runtime.onMessage.addListener((msg) => {
     folderName: currentScanFolderName,
   });
 }
+
+  if (msg && msg.type === "get-current-settings") {
+    return window.getSettings();
+  }
 
   return false;
 });
@@ -384,25 +420,10 @@ browser.storage.onChanged.addListener(async (changes, areaName) => {
   browser.menus.refresh();
 });
 
-// Menu option 
-browser.menus.onClicked.addListener(async (info) => {
-  if (info.menuItemId === "open-options") {
-    await browser.runtime.openOptionsPage();
+async function runDuplicateScan(selectedFolders) {
+  if (!Array.isArray(selectedFolders) || selectedFolders.length === 0) {
     return;
   }
-
-  const toolbarItem = getToolbarComparisonItem(info.menuItemId);
-    if (toolbarItem) {
-      await window.saveSettings({
-        [toolbarItem.key]: info.checked,
-      });
-      return;
-  }
-
-  if (info.menuItemId !== "log-duplicates") return;
-
-  const selectedFolders = getSelectedFolders(info);
-    if (selectedFolders.length === 0) return;
 
   const settings = await window.getSettings();
 
@@ -412,32 +433,32 @@ browser.menus.onClicked.addListener(async (info) => {
     foldersToScan.push(...collected);
   }
 
-foldersToScan = dedupeFolders(foldersToScan);
-foldersToScan = foldersToScan.filter((folder) => !shouldSkipFolder(folder, settings));
+  foldersToScan = dedupeFolders(foldersToScan);
+  foldersToScan = foldersToScan.filter((folder) => !shouldSkipFolder(folder, settings));
 
-  if (foldersToScan.length === 0) return;
+  if (foldersToScan.length === 0) {
+    return;
+  }
 
-currentScanFolderName =
-  foldersToScan.length === 1
-    ? foldersToScan[0].name
-    : `${foldersToScan[0].name} + ${foldersToScan.length - 1} more`;
+  currentScanFolderName =
+    foldersToScan.length === 1
+      ? foldersToScan[0].name
+      : `${foldersToScan[0].name} + ${foldersToScan.length - 1} more`;
 
   const hasAnyCriteria =
-  settings.compareSubject ||
-  settings.compareAuthor ||
-  settings.compareRecipients ||
-  settings.compareCc ||
-  settings.compareSendTime ||
-  settings.compareMessageId ||
-  settings.compareFolder ||
-  settings.compareBody;
+    settings.compareSubject ||
+    settings.compareAuthor ||
+    settings.compareRecipients ||
+    settings.compareCc ||
+    settings.compareSendTime ||
+    settings.compareMessageId ||
+    settings.compareFolder ||
+    settings.compareBody;
 
-  // reset scan state
   scanInProgress = true;
   lastScanResults = null;
   lastScanError = null;
 
-  // open popup window immediately
   await browser.windows.create({
     url: browser.runtime.getURL("dialog.html"),
     type: "popup",
@@ -453,103 +474,183 @@ currentScanFolderName =
 
     let allMessages = [];
 
-      for (const folder of foldersToScan) {
+    for (const folder of foldersToScan) {
       const messages = await getAllMessages(folder);
 
-      let filtered = messages
+      let filtered = messages;
 
       if (settings.skipImapDeleted) {
         filtered = filtered.filter(
-          (message) => !(Array.isArray(message.flags) && message.flags.includes("deleted"))
+          (message) =>
+            !(Array.isArray(message.flags) && message.flags.includes("deleted"))
         );
       }
 
       switch (settings.searchScope) {
         case "unread":
-        filtered = messages.filter((message) => !message.read);
-        break;
+          filtered = filtered.filter((message) => !message.read);
+          break;
         case "all":
         default:
-        filtered = messages;
-        break;
+          break;
       }
 
       allMessages.push(...filtered);
-      }
+    }
 
     if (!hasAnyCriteria) {
       lastScanResults = {
         folderName:
-        foldersToScan.length === 1
-          ? foldersToScan[0].name
-          : `${foldersToScan.length} folders`,
+          foldersToScan.length === 1
+            ? foldersToScan[0].name
+            : `${foldersToScan.length} folders`,
         scannedCount: allMessages.length,
         duplicateGroupCount: 0,
         rows: [],
         noCriteriaSelected: true,
-     };
-
+      };
       return;
     }
 
-  const comparisons = await mapWithConcurrency(
-  allMessages,
-  ENTRY_CONCURRENCY,
-  async (message) => {
-    try {
-      return await getComparisonData(message, settings);
-    } catch (e) {
-      console.warn("Failed to process message", message.id, e);
-      return null;
+    const comparisons = await mapWithConcurrency(
+      allMessages,
+      ENTRY_CONCURRENCY,
+      async (message) => {
+        try {
+          return await getComparisonData(message, settings);
+        } catch (e) {
+          console.warn("Failed to process message", message.id, e);
+          return null;
+        }
+      }
+    );
+
+    const groups = new Map();
+
+    for (const item of comparisons) {
+      if (!item || !item.key) {
+        continue;
+      }
+
+      if (!groups.has(item.key)) {
+        groups.set(item.key, {
+          subject: item.subject,
+          author: item.author,
+          folder: item.folder,
+          date: item.date,
+          dateValue: item.dateValue,
+          count: 0,
+          messageIds: [],
+        });
+      }
+
+      const group = groups.get(item.key);
+      group.count += 1;
+      group.messageIds.push(item.id);
     }
-  }
-);
 
-const groups = new Map();
+    const rows = [...groups.values()]
+      .filter((group) => group.count > 1)
+      .map((group) => ({
+        subject: group.subject,
+        author: group.author,
+        folder: group.folder,
+        date: group.date,
+        dateValue: group.dateValue,
+        count: group.count,
+        messageIds: group.messageIds,
+      }))
+      .sort((a, b) => b.count - a.count);
 
-for (const item of comparisons) {
-  if (!item || !item.key) {
-    continue;
-  }
-
-  if (!groups.has(item.key)) {
-    groups.set(item.key, {
-      subject: item.subject,
-      count: 0,
-      messageIds: [],
-    });
-  }
-
-  const group = groups.get(item.key);
-  group.count += 1;
-  group.messageIds.push(item.id);
-}
-
-const rows = [...groups.values()]
-  .filter((group) => group.count > 1)
-  .map((group) => ({
-    subject: group.subject,
-    count: group.count,
-    messageIds: group.messageIds,
-  }))
-  .sort((a, b) => b.count - a.count);
-
-  // Cache results for the dialog.js popup
     lastScanResults = {
       folderName:
-      foldersToScan.length === 1
-      ? foldersToScan[0].name
-      : `${foldersToScan.length} folders`,
+        foldersToScan.length === 1
+          ? foldersToScan[0].name
+          : `${foldersToScan.length} folders`,
       scannedCount: allMessages.length,
       duplicateGroupCount: rows.length,
       rows,
+      noDuplicatesFound: rows.length === 0,
     };
-
   } catch (err) {
     console.error("Scan failed:", err);
     lastScanError = String(err);
   } finally {
     scanInProgress = false;
     currentScanFolderName = null;
+  }
+}
+
+// Menu option 
+browser.menus.onClicked.addListener(async (info) => {
+  if (info.menuItemId === "open-options") {
+    await browser.runtime.openOptionsPage();
+    return;
+  }
+
+  const toolbarItem = getToolbarComparisonItem(info.menuItemId);
+  if (toolbarItem) {
+    await window.saveSettings({
+      [toolbarItem.key]: info.checked,
+    });
+    return;
+  }
+
+    if (info.menuItemId === "tools-remove-duplicates") {
+    try {
+      const selectedFolders = await browser.mailTabs.getSelectedFolders();
+      await runDuplicateScan(selectedFolders);
+    } catch (err) {
+      console.error("Tools menu scan failed:", err);
+    }
+    return;
+  }
+
+    if (info.menuItemId === "set-originals-folder") {
+    const selectedFolders = getSelectedFolders(info);
+    setOriginalsFolders(selectedFolders);
+    console.log("Originals folders set:", selectedFolders.map((folder) => folder.name));
+    return;
+  }
+
+  if (info.menuItemId === "tools-set-originals-folder") {
+    try {
+      const selectedFolders = await browser.mailTabs.getSelectedFolders();
+      setOriginalsFolders(selectedFolders);
+      console.log("Originals folders set:", selectedFolders.map((folder) => folder.name));
+    } catch (err) {
+      console.error("Failed to set originals folders from Tools menu:", err);
+    }
+    return;
+  }
+
+  if (info.menuItemId !== "log-duplicates") return;
+
+  const selectedFolders = getSelectedFolders(info);
+  await runDuplicateScan(selectedFolders);
+
+});
+
+if (browser.commands && browser.commands.onCommand) {
+  browser.commands.onCommand.addListener(async (command) => {
+    if (command !== "run-duplicate-scan") return;
+
+    try {
+      const selectedFolders = await browser.mailTabs.getSelectedFolders();
+      await runDuplicateScan(selectedFolders);
+    } catch (err) {
+      console.error("Command failed:", err);
+    }
+  });
+} else {
+  console.warn("commands API not available");
+}
+
+browser.browserAction.onClicked.addListener(async () => {
+  try {
+    const selectedFolders = await browser.mailTabs.getSelectedFolders();
+    await runDuplicateScan(selectedFolders);
+  } catch (err) {
+    console.error("Toolbar click scan failed:", err);
   }
 });

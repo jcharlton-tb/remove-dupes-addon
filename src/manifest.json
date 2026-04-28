@@ -6,7 +6,8 @@
   "default_locale": "en",
   "browser_specific_settings": {
     "gecko": {
-      "id": "{f6190d00-0fd9-4886-9509-9254e69f4649}"
+      "id": "{f6190d00-0fd9-4886-9509-9254e69f4649}",
+      "strict_min_version": "128.0"
     }
   },
   "permissions": [
@@ -29,5 +30,15 @@
   
   "browser_action": {
     "default_title": "__MSG_extensionName__"
+  },
+
+  "commands": {
+    "run-duplicate-scan": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+D"
+      },
+    "description": "__MSG_runDuplicateScanCommand__"
+    }
   }
+
 }
