@@ -114,7 +114,7 @@
 
     .footer {
       display: flex;
-      justify-content: flex-end;
+      justify-content: space-between;
       margin-top: 16px;
     }
 
@@ -167,11 +167,36 @@
       background: #dce9ff !important;
       font-weight: 700;
     }
-    
+
     .active-criterion {
       background: #dce9ff !important;
       font-weight: 700;
     }    
+
+    .group-row {
+      font-weight: 600;
+    }
+
+    .message-row td {
+      background: #fafafa;
+      padding-left: 24px;
+    }
+
+    .message-review {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    .message-actions {
+      min-width: 150px;
+      display: flex;
+      gap: 12px;
+    }
+
+    .message-meta {
+      line-height: 1.4;
+    }
   </style>
 </head>
 
@@ -234,11 +259,18 @@
     </div>
 
     <div class="footer">
-      <wa-button variant="primary" id="close" data-i18n-content="close">
-        Close
-      </wa-button>
+      <div class="footer-left">
+        <wa-button variant="primary" id="delete-selected" type="button">
+          Delete selected
+        </wa-button>
+      </div>
+
+      <div class="footer-right">
+        <wa-button variant="primary" id="close" data-i18n-content="close">
+          Close
+        </wa-button>
+      </div>
     </div>
-  </div>
 
   <script type="module" src="dialog.js"></script>
 </body>

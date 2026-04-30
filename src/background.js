@@ -364,8 +364,11 @@ async function getComparisonData(message, settings) {
   folder: String(message.folder?.name || message.folder?.path || ""),
   date: hdr.date ? new Date(hdr.date).toLocaleString() : "",
   dateValue: hdr.date ? new Date(hdr.date).getTime() : 0,
+  messageId: String(hdr.headerMessageId || hdr.messageId || ""),
+  size: hdr.size || message.size || "",
+  flags: Array.isArray(message.flags) ? message.flags : [],
   key: parts.join("|"),
-};
+  };
 }
 
 // Cache for dialog window
@@ -382,16 +385,26 @@ browser.runtime.onMessage.addListener((msg) => {
   }
 
   if (msg && msg.type === "get-scan-status") {
-  return Promise.resolve({
-    inProgress: scanInProgress,
-    hasResults: !!lastScanResults,
-    error: lastScanError,
-    folderName: currentScanFolderName,
-  });
-}
+    return Promise.resolve({
+      inProgress: scanInProgress,
+      hasResults: !!lastScanResults,
+      error: lastScanError,
+      folderName: currentScanFolderName,
+    });
+  }
 
   if (msg && msg.type === "get-current-settings") {
     return window.getSettings();
+  }
+
+  if (msg && msg.type === "delete-selected-messages") {
+    const ids = Array.isArray(msg.messageIds) ? msg.messageIds : [];
+
+    if (ids.length === 0) {
+      return Promise.resolve();
+    }
+
+    return browser.messages.delete(ids);
   }
 
   return false;
@@ -445,7 +458,15 @@ async function runDuplicateScan(selectedFolders) {
   }
 
   foldersToScan = dedupeFolders(foldersToScan);
-  foldersToScan = foldersToScan.filter((folder) => !shouldSkipFolder(folder, settings));
+  foldersToScan = foldersToScan.filter((folder) => {
+  const key = folder.path || folder.name;
+
+  if (originalFolderKeys.has(key)) {
+    return true;
+  }
+
+  return !shouldSkipFolder(folder, settings);
+  });
 
   if (foldersToScan.length === 0) {
     return;
@@ -519,6 +540,7 @@ async function runDuplicateScan(selectedFolders) {
         duplicateGroupCount: 0,
         rows: [],
         noCriteriaSelected: true,
+        originalsFolderNames: originalsForThisScan.map((f) => f.name),
       };
       return;
     }
@@ -555,12 +577,26 @@ async function runDuplicateScan(selectedFolders) {
           count: 0,
           originalCount: 0,
           messageIds: [],
+          messages: [],
         });
       }
 
       const group = groups.get(item.key);
       group.count += 1;
       group.messageIds.push(item.id);
+      group.messages.push({
+        id: item.id,
+        subject: item.subject,
+        author: item.author,
+        folder: item.folder,
+        date: item.date,
+        dateValue: item.dateValue,
+        messageId: item.messageId,
+        size: item.size,
+        flags: item.flags,
+        isOriginal: item.isOriginal === true,
+      });
+      
       if (item.isOriginal) {
         group.originalCount += 1;
       }
@@ -577,15 +613,26 @@ async function runDuplicateScan(selectedFolders) {
     return group.count > 1;
     })
 
-    .map((group) => ({
-      subject: group.subject,
-      author: group.author,
-      folder: group.folder,
-      date: group.date,
-      dateValue: group.dateValue,
-      count: group.count,
-      messageIds: group.messageIds,
-      }))
+    .map((group) => {
+      const messages = group.messages.map((message, index) => ({
+        ...message,
+        action: hasOriginals
+        ? (message.isOriginal ? "keep" : "delete")
+        : (index === 0 ? "keep" : "delete"),
+      }));
+
+      return {
+        subject: group.subject,
+        author: group.author,
+        folder: group.folder,
+        date: group.date,
+        dateValue: group.dateValue,
+        count: group.count,
+        messageIds: group.messageIds,
+        messages,
+      };
+    })
+
     .sort((a, b) => b.count - a.count);
 
     lastScanResults = {
@@ -597,6 +644,7 @@ async function runDuplicateScan(selectedFolders) {
       duplicateGroupCount: rows.length,
       rows,
       noDuplicatesFound: rows.length === 0,
+      originalsFolderNames: originalsForThisScan.map((f) => f.name),
     };
   } catch (err) {
     console.error("Scan failed:", err);

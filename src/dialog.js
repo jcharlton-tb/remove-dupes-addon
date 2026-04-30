@@ -50,13 +50,45 @@ function renderRowsChunked(tbody, rows, chunkSize = 1, token) {
 
     for (; i < end; i++) {
       const r = rows[i];
-      html += `<tr>
+      html += `<tr class="group-row">
         <td class="subject">${escapeHtml(r.subject)}</td>
         <td>${escapeHtml(r.author)}</td>
         <td>${escapeHtml(r.folder)}</td>
         <td>${escapeHtml(r.date)}</td>
         <td class="count">${Number(r.count) || 0}</td>
       </tr>`;
+
+      for (const message of r.messages || []) {
+        const keepChecked = message.action === "keep" ? "checked" : "";
+        const deleteChecked = message.action === "delete" ? "checked" : "";
+        const originalMessageLabel = browser.i18n.getMessage("originalMessageLabel") || "Original";
+        const originalLabel = message.isOriginal
+        ? ` <strong>(${escapeHtml(originalMessageLabel)})</strong>`
+         : "";
+
+        html += `<tr class="message-row" data-message-id="${escapeHtml(message.id)}">
+          <td colspan="5">
+            <div class="message-review">
+            <div class="message-actions">
+              <label>
+                <input type="radio" name="action-${escapeHtml(message.id)}" value="keep" ${keepChecked}>
+                ${escapeHtml(browser.i18n.getMessage("keepAction"))}
+              </label>
+              <label>
+                <input type="radio" name="action-${escapeHtml(message.id)}" value="delete" ${deleteChecked}>
+                ${escapeHtml(browser.i18n.getMessage("deleteAction"))}
+              </label>
+            </div>
+
+            <div class="message-meta">
+              <strong>${escapeHtml(message.subject)}</strong>${originalLabel}<br>
+              ${escapeHtml(message.author)}<br>
+              ${escapeHtml(message.folder)} • ${escapeHtml(message.date)}
+            </div>
+            </div>
+          </td>
+        </tr>`;
+      }
     }
 
     tbody.insertAdjacentHTML("beforeend", html);
@@ -262,13 +294,50 @@ async function init() {
   const countBtn = document.getElementById("sort-count");
   const authorBtn = document.getElementById("sort-author");
   const folderBtn = document.getElementById("sort-folder");
-  const dateBtn = document.getElementById("sort-date")
+  const dateBtn = document.getElementById("sort-date");
 
   if (subjectBtn) subjectBtn.addEventListener("click", () => toggleSort("subject"));
   if (countBtn) countBtn.addEventListener("click", () => toggleSort("count"));
   if (authorBtn) authorBtn.addEventListener("click", () => toggleSort("author"));
   if (folderBtn) folderBtn.addEventListener("click", () => toggleSort("folder"));
   if (dateBtn) dateBtn.addEventListener("click", () => toggleSort("date"));
+
+  const tbody = document.getElementById("rows");
+
+  if (tbody) {
+    tbody.addEventListener("change", (event) => {
+      const input = event.target;
+
+      if (!(input instanceof HTMLInputElement)) return;
+      if (input.type !== "radio") return;
+
+      const messageRow = input.closest(".message-row");
+      const messageId = messageRow?.dataset.messageId;
+
+      if (!messageId) return;
+
+      for (const row of data?.rows || []) {
+        const message = (row.messages || []).find(
+        (m) => String(m.id) === String(messageId)
+        );
+
+        if (message) {
+          message.action = input.value;
+          break;
+        }
+      }
+
+      const deleteSelectedBtn = document.getElementById("delete-selected");
+
+      if (deleteSelectedBtn) {
+        const hasMessagesToDelete = (data?.rows || []).some((row) =>
+        (row.messages || []).some((m) => m.action === "delete")
+        );
+
+        deleteSelectedBtn.disabled = !hasMessagesToDelete;
+      }
+    });
+  }
 
   await render(); 
 
@@ -279,8 +348,64 @@ async function init() {
     });
   }
 
+  const deleteSelectedBtn = document.getElementById("delete-selected");
+
+  if (deleteSelectedBtn) {
+  deleteSelectedBtn.disabled = true;
+
+  deleteSelectedBtn.addEventListener("click", async () => {
+      const messageIdsToDelete = [];
+
+      for (const row of data?.rows || []) {
+        for (const message of row.messages || []) {
+          if (message.action === "delete") {
+            messageIdsToDelete.push(message.id);
+          }
+        }
+      }
+
+      if (messageIdsToDelete.length === 0) {
+        return;
+      }
+
+      const confirmed = confirm(
+        browser.i18n.getMessage("deleteSelectedConfirm", [
+          String(messageIdsToDelete.length),
+        ])
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      await browser.runtime.sendMessage({
+        type: "delete-selected-messages",
+        messageIds: messageIdsToDelete,
+      });
+
+      for (const row of data?.rows || []) {
+        row.messages = (row.messages || []).filter(
+        (message) => !messageIdsToDelete.includes(message.id)
+        );
+      }
+
+      data.rows = (data.rows || []).filter((row) => (row.messages || []).length > 1);
+      data.duplicateGroupCount = data.rows.length;
+
+      await render();
+    });
+  }
+
   await waitForResults();
   await render();
+
+  if (deleteSelectedBtn) {
+    const hasMessagesToDelete = (data?.rows || []).some((row) =>
+    (row.messages || []).some((m) => m.action === "delete")
+    );
+
+    deleteSelectedBtn.disabled = !hasMessagesToDelete;
+  }
 }
 
 init().catch((err) => {
