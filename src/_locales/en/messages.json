@@ -230,5 +230,9 @@
 
     "originalsFolderSet": {
       "message": "Originals folder set for next search."
+    },
+
+    "originalsFoldersUsed": {
+    "message": "Originals folders: $1"
     }
   }
