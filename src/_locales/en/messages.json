@@ -234,5 +234,34 @@
 
     "originalsFoldersUsed": {
     "message": "Originals folders: $1"
+    },
+
+    "keepAction": {
+    "message": "Keep"
+    },
+
+    "deleteAction": {
+    "message": "Delete"
+    },
+
+    "originalMessageLabel": {
+    "message": "Original"
+    },
+
+    "deleteSelected": {
+      "message": "Delete selected"
+    },
+
+    "deleteSelectedConfirm": {
+      "message": "Delete $COUNT$ selected duplicate messages?",
+      "placeholders": {
+        "count": {
+          "content": "$1"
+        }
+      }
+    },
+
+    "deletingSelected": {
+      "message": "Deleting selected messages…"
     }
-  }
+}
