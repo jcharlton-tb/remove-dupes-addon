@@ -337,6 +337,12 @@ async function init() {
         deleteSelectedBtn.disabled = !hasMessagesToDelete;
       }
     });
+    
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        browser.runtime.sendMessage({ type: "abort-scan" });
+      }
+    });
   }
 
   await render(); 

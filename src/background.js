@@ -301,10 +301,14 @@ function normalizeBody(text) {
     .toLowerCase();
 }
 
-async function getComparisonData(message, settings) {
+async function getBodyComparisonKey(messageId) {
+  const fullMessage = await browser.messages.getFull(messageId);
+  return normalizeBody(extractBodyText(fullMessage));
+}
+
+async function getMessageComparisonData(message, settings) {
   const hdr = await browser.messages.get(message.id);
   const parts = [];
-  let fullMessage = null;
 
   if (settings.compareSubject) {
     parts.push(`subject:${normalizeSubject(hdr.subject)}`);
@@ -352,11 +356,6 @@ async function getComparisonData(message, settings) {
     );
   }
 
-  if (settings.compareBody) {
-    fullMessage = await browser.messages.getFull(message.id);
-    parts.push(`body:${normalizeBody(extractBodyText(fullMessage))}`);
-  }
-
   return {
   id: message.id,
   subject: String(hdr.subject || "(no subject)"),
@@ -369,6 +368,55 @@ async function getComparisonData(message, settings) {
   flags: Array.isArray(message.flags) ? message.flags : [],
   key: parts.join("|"),
   };
+}
+
+async function filterGroupsByBody(groups) {
+  const bodyFilteredGroups = [];
+
+  for (const group of groups) {
+    if (group.messages.length < 2) {
+      continue;
+    }
+
+    const bodyGroups = new Map();
+
+    for (const message of group.messages) {
+      try {
+        const bodyKey = await getBodyComparisonKey(message.id);
+
+        if (!bodyGroups.has(bodyKey)) {
+          bodyGroups.set(bodyKey, {
+            subject: group.subject,
+            author: group.author,
+            folder: group.folder,
+            date: group.date,
+            dateValue: group.dateValue,
+            count: 0,
+            originalCount: 0,
+            messageIds: [],
+            messages: [],
+          });
+        }
+
+        const bodyGroup = bodyGroups.get(bodyKey);
+        bodyGroup.count += 1;
+        bodyGroup.messageIds.push(message.id);
+        bodyGroup.messages.push(message);
+
+        if (message.isOriginal) {
+          bodyGroup.originalCount += 1;
+        }
+      } catch (error) {
+        console.warn("Failed to compare message body", message.id, error);
+      }
+    }
+
+    bodyFilteredGroups.push(
+      ...[...bodyGroups.values()].filter((bodyGroup) => bodyGroup.count > 1)
+    );
+  }
+
+  return bodyFilteredGroups;
 }
 
 // Cache for dialog window
@@ -550,7 +598,7 @@ async function runDuplicateScan(selectedFolders) {
       ENTRY_CONCURRENCY,
       async (message) => {
         try {
-          const item = await getComparisonData(message, settings);
+          const item = await getMessageComparisonData(message, settings);
           item.isOriginal = originalFolderKeys.has(message.folder?.path || message.folder?.name);
           return item;
         } catch (e) {
@@ -602,9 +650,15 @@ async function runDuplicateScan(selectedFolders) {
       }
     }
 
+    let groupedValues = [...groups.values()];
+
+    if (settings.compareBody) {
+      groupedValues = await filterGroupsByBody(groupedValues);
+    }
+
     const hasOriginals = originalsForThisScan.length > 0;
 
-    const rows = [...groups.values()]
+    const rows = groupedValues
     .filter((group) => {
       if (hasOriginals) {
         return group.originalCount > 0 && group.count > group.originalCount;
