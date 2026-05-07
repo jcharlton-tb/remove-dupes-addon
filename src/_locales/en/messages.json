@@ -181,11 +181,11 @@
     },
 
     "noResults": {
-      "message": "No duplicate messages found."
+      "message": "No duplicate messages found in this scan."
     },
 
     "noCriteriaSelected": {
-      "message": "No comparison criteria selected."
+      "message": "No comparison criteria selected. Enable at least one comparison option and run the scan again."
     },
 
     "runDuplicateScanCommand": {
@@ -263,5 +263,25 @@
 
     "deletingSelected": {
       "message": "Deleting selected messages…"
+    },
+
+    "keepFirstInEachGroup": {
+      "message": "Keep first in each group"
+    },
+
+    "keepLastInEachGroup": {
+      "message": "Keep last in each group"
+    },
+
+    "deleteAllDuplicates": {
+      "message": "Mark duplicates for deletion"
+    },
+
+    "resetReviewChoices": {
+      "message": "Reset choices"
+    },
+
+    "bulkActionsUnavailableWithOriginals": {
+      "message": "Bulk actions are disabled when originals folders are used."
     }
 }
