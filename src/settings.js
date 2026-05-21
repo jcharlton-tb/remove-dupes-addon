@@ -1,4 +1,4 @@
-const DEFAULT_SETTINGS = {
+export const DEFAULT_SETTINGS = {
     skipSpecialFolders: true,
     skipImapDeleted: true,
     searchSubfolders: true,
@@ -20,14 +20,16 @@ const DEFAULT_SETTINGS = {
     searchScope: "all"
   };
   
-  async function getSettings() {
-    const stored = await browser.storage.local.get();
-    return { ...DEFAULT_SETTINGS, ...stored };
+  export async function getSettings() {
+    const { preferences } = await browser.storage.local.get({ preferences: {} });
+    return { ...DEFAULT_SETTINGS, ...preferences };
   }
   
-  async function saveSettings(updates) {
-    await browser.storage.local.set(updates);
-  }
+  export async function saveSettings(updates) {
+    await currentSettings = await getSettings();
+    const preferences = ( ...currentSettings, ...updates) };
+
+    await browser.storage.local.set({ preferences })
   
   function getComparisonMenuItems(settings) {
   return [

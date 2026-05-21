@@ -1,3 +1,4 @@
+import * as preferences from "./src/settings.js";
 // background.js
 console.log("RemoveDupes background loaded");
 
@@ -43,7 +44,7 @@ function getToolbarComparisonItem(menuItemId) {
 }
 
 async function createToolbarMenus() {
-  const settings = await window.getSettings();
+  const settings = await preferences.getSettings();
 
   browser.menus.create({
     id: "open-options",
@@ -81,6 +82,7 @@ browser.menus.onShown.addListener(async (info) => {
   const shouldDisable = !folder || folder.isRoot === true;
 
   const folderKey = folder?.path || folder?.name;
+  const originalsFolders = await getOriginalsFolders();
   const isOriginalsFolder = originalsFolders.some(
     (originalFolder) => (originalFolder.path || originalFolder.name) === folderKey
   );
@@ -116,8 +118,18 @@ async function getAllMessages(folder) {
   return allMessages;
 }
 
-function setOriginalsFolders(folders) {
-  originalsFolders = Array.isArray(folders) ? folders : [];
+async function setOriginalsFolders(folders) {
+  await browser.storage.local.set({
+    [ORIGINALS_FOLDER_KEY]: Array.isArray(folders) ? folders : [],
+  });
+
+  return Array.isArray(stored[ORIGINALS_FOLDER_KEY])
+  ? stored[ORIGINALS_FOLDER_KEY]
+  : [];
+}
+
+async function clearOriginalsFolders() {
+  await browser.storage.local.remove(ORIGINALS_FOLDER_KEY);
 }
 
 function getSelectedFolders(info) {
@@ -439,7 +451,8 @@ let lastScanResults = null;
 let scanInProgress = false;
 let lastScanError = null;
 let currentScanFolderName = null;
-let originalsFolders = [];
+
+const ORIGINALS_FOLDER_KEY = "originalsFolders";
 
 
 browser.runtime.onMessage.addListener((msg) => {
@@ -457,7 +470,7 @@ browser.runtime.onMessage.addListener((msg) => {
   }
 
   if (msg && msg.type === "get-current-settings") {
-    return window.getSettings();
+    return preferences.getSettings();
   }
 
   if (msg && msg.type === "delete-selected-messages") {
@@ -474,18 +487,21 @@ browser.runtime.onMessage.addListener((msg) => {
 });
 
 browser.storage.onChanged.addListener(async (changes, areaName) => {
-  if (areaName !== "local") {
+  if (areaName !== "local" || !changes.preferences) {
     return;
   }
 
+  const oldPrefs = changes.preferences.oldValue || {};
+  const newPrefs = changes.preferences.newValue || {};
+
   for (const item of TOOLBAR_COMPARISON_ITEMS) {
-    if (!changes[item.key]) {
+    if (oldPrefs[item.key] === newPrefs[item.key]) {
       continue;
     }
 
     try {
       await browser.menus.update(item.id, {
-        checked: changes[item.key].newValue,
+        checked: newPrefs[item.key],
       });
     } catch (error) {
       console.warn("Failed to update toolbar menu item:", item.id, error);
@@ -500,10 +516,10 @@ async function runDuplicateScan(selectedFolders) {
     return;
   }
 
-  const settings = await window.getSettings();
+  const settings = await preferences.getSettings();
 
-  const originalsForThisScan = originalsFolders;
-  originalsFolders = [];
+  const originalsForThisScan = await getOriginalsFolders();
+  await clearOriginalsFolders();
 
   // Track folders marked as "originals" for one-shot duplicate comparison
   const originalFolderKeys = new Set(
@@ -741,7 +757,7 @@ browser.menus.onClicked.addListener(async (info) => {
 
   const toolbarItem = getToolbarComparisonItem(info.menuItemId);
   if (toolbarItem) {
-    await window.saveSettings({
+    await preferences.saveSettings({
       [toolbarItem.key]: info.checked,
     });
     return;
@@ -759,7 +775,7 @@ browser.menus.onClicked.addListener(async (info) => {
 
     if (info.menuItemId === "set-originals-folder") {
     const selectedFolders = getSelectedFolders(info);
-    setOriginalsFolders(selectedFolders);
+    await setOriginalsFolders(selectedFolders);
     console.log("Originals folders set:", selectedFolders.map((folder) => folder.name));
     return;
   }
@@ -767,7 +783,7 @@ browser.menus.onClicked.addListener(async (info) => {
   if (info.menuItemId === "tools-set-originals-folder") {
     try {
       const selectedFolders = await browser.mailTabs.getSelectedFolders();
-      setOriginalsFolders(selectedFolders);
+      await setOriginalsFolders(selectedFolders);
       console.log("Originals folders set:", selectedFolders.map((folder) => folder.name));
     } catch (err) {
       console.error("Failed to set originals folders from Tools menu:", err);
