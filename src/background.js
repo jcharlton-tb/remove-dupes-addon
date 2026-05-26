@@ -1,4 +1,9 @@
-import * as preferences from "./src/settings.js";
+import * as preferences from "./settings.js";
+import * as originals from "./originals.js";
+import * as folders from "./folders.js";
+import * as comparison from "./comparison.js";
+import * as menus from "./menus.js";
+
 // background.js
 console.log("RemoveDupes background loaded");
 
@@ -28,49 +33,11 @@ browser.menus.create({
 });
 
 // settings menu
-const TOOLBAR_COMPARISON_ITEMS = [
-  { id: "toggle-compare-subject", titleKey: "compareSubjectMenu", key: "compareSubject" },
-  { id: "toggle-compare-author", titleKey: "compareAuthorMenu", key: "compareAuthor" },
-  { id: "toggle-compare-recipients", titleKey: "compareRecipientsMenu", key: "compareRecipients" },
-  { id: "toggle-compare-cc", titleKey: "compareCcMenu", key: "compareCc" },
-  { id: "toggle-compare-send-time", titleKey: "compareSendTimeMenu", key: "compareSendTime" },
-  { id: "toggle-compare-message-id", titleKey: "compareMessageIdMenu", key: "compareMessageId" },
-  { id: "toggle-compare-folder", titleKey: "compareFolderMenu", key: "compareFolder" },
-  { id: "toggle-compare-body", titleKey: "compareBodyMenu", key: "compareBody" },
-];
+const settings = await preferences.getSettings();
+menus.createToolbarMenus(settings)
 
-function getToolbarComparisonItem(menuItemId) {
-  return TOOLBAR_COMPARISON_ITEMS.find((item) => item.id === menuItemId) || null;
-}
-
-async function createToolbarMenus() {
-  const settings = await preferences.getSettings();
-
-  browser.menus.create({
-    id: "open-options",
-    title: browser.i18n.getMessage("toolbarOptions"),
-    contexts: ["browser_action"],
-  });
-
-  browser.menus.create({
-    id: "toolbar-separator",
-    type: "separator",
-    contexts: ["browser_action"],
-  });
-
-  for (const item of TOOLBAR_COMPARISON_ITEMS) {
-    browser.menus.create({
-      id: item.id,
-      title: browser.i18n.getMessage(item.titleKey),
-      type: "checkbox",
-      checked: settings[item.key],
-      contexts: ["browser_action"],
-    });
-  }
-}
-
-createToolbarMenus().catch((error) => {
-  console.error("Failed to create toolbar menus:", error);
+menus.createToolbarMenus(settings).catch((error) => {
+  console.error("Failed to create toolbar menus:");
 });
 
 browser.menus.onShown.addListener(async (info) => {
@@ -82,7 +49,7 @@ browser.menus.onShown.addListener(async (info) => {
   const shouldDisable = !folder || folder.isRoot === true;
 
   const folderKey = folder?.path || folder?.name;
-  const originalsFolders = await getOriginalsFolders();
+  const originalsFolders = await originals.getOriginalsFolders();
   const isOriginalsFolder = originalsFolders.some(
     (originalFolder) => (originalFolder.path || originalFolder.name) === folderKey
   );
@@ -105,354 +72,11 @@ browser.menus.onShown.addListener(async (info) => {
 browser.menus.refresh();
 });
 
-
-async function getAllMessages(folder) {
-  let results = await browser.messages.list(folder);
-  const allMessages = [...results.messages];
-
-  while (results.id) {
-    results = await browser.messages.continueList(results.id);
-    allMessages.push(...results.messages);
-  }
-
-  return allMessages;
-}
-
-async function setOriginalsFolders(folders) {
-  await browser.storage.local.set({
-    [ORIGINALS_FOLDER_KEY]: Array.isArray(folders) ? folders : [],
-  });
-
-  return Array.isArray(stored[ORIGINALS_FOLDER_KEY])
-  ? stored[ORIGINALS_FOLDER_KEY]
-  : [];
-}
-
-async function clearOriginalsFolders() {
-  await browser.storage.local.remove(ORIGINALS_FOLDER_KEY);
-}
-
-function getSelectedFolders(info) {
-  if (Array.isArray(info.selectedFolders) && info.selectedFolders.length > 0) {
-    return info.selectedFolders;
-  }
-
-  if (info.selectedFolder) {
-    return [info.selectedFolder];
-  }
-
-  return [];
-}
-
-async function collectFolders(rootFolder, includeSubfolders) {
-  const folders = [rootFolder];
-
-  if (!includeSubfolders || !Array.isArray(rootFolder.subFolders)) {
-    return folders;
-  }
-
-  for (const subFolder of rootFolder.subFolders) {
-    const nested = await collectFolders(subFolder, true);
-    folders.push(...nested);
-  }
-
-  return folders;
-}
-
-function dedupeFolders(folders) {
-  const seen = new Set();
-  const unique = [];
-
-  for (const folder of folders) {
-    const key = folder.path || folder.name;
-
-    if (!key || seen.has(key)) {
-      continue;
-    }
-
-    seen.add(key);
-    unique.push(folder);
-  }
-
-  return unique;
-}
-
-function shouldSkipFolder(folder, settings) {
-  if (!folder) {
-    return true;
-  }
-
-  if (folder.isRoot === true) {
-    return true;
-  }
-
-  if (folder.type === "newsgroup" || folder.isServer) {
-    return true;
-  }
-
-  if (folder.type === "virtual") {
-    return true;
-  }
-
-  if (settings.skipSpecialFolders) {
-    const specialTypes = new Set([
-      "trash",
-      "sent",
-      "drafts",
-      "templates",
-      "archives",
-      "junk",
-      "outbox",
-    ]);
-
-    if (folder.type !== "inbox" && specialTypes.has(folder.type)) {
-      return true;
-    }
-  }
-
-  console.log("Folder type:", folder.name, folder.type);
-
-  return false;
-}
-
-
-// Async per entry processing
-const ENTRY_CONCURRENCY = 8;
-
-async function mapWithConcurrency(items, limit, mapper) {
-  const results = new Array(items.length);
-  let nextIndex = 0;
-
-  async function worker() {
-    while (true) {
-      const i = nextIndex++;
-      if (i >= items.length) return;
-      results[i] = await mapper(items[i], i);
-    }
-  }
-
-  const workerCount = Math.min(limit, items.length);
-  await Promise.all(Array.from({ length: workerCount }, () => worker()));
-  return results;
-}
-
-function normalizeSubject(subject) {
-  return String(subject || "(no subject)")
-    .trim()
-    .replace(/^(re|fw|fwd):\s*/i, "") 
-    .toLowerCase();
-}
-
-function normalizeAddressList(addresses, stripAndSort) {
-  const list = Array.isArray(addresses) ? addresses : [];
-
-  const normalized = list
-    .map((entry) => {
-      if (!entry) {
-        return "";
-      }
-
-      const text = String(entry).trim().toLowerCase();
-
-      if (!stripAndSort) {
-        return text;
-      }
-
-      const match = text.match(/<([^>]+)>/);
-      return match ? match[1].trim() : text;
-    })
-    .filter(Boolean);
-
-  if (stripAndSort) {
-    normalized.sort();
-  }
-
-  return normalized.join(",");
-}
-
-function buildSendTimeKey(dateValue, resolution) {
-  if (!dateValue) {
-    return "";
-  }
-
-  const date = new Date(dateValue);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  const year = String(date.getFullYear());
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hour = String(date.getHours()).padStart(2, "0");
-  const minute = String(date.getMinutes()).padStart(2, "0");
-  const second = String(Math.floor(date.getTime() / 1000));
-
-  switch (resolution) {
-    case "year":
-      return year;
-    case "month":
-      return `${year}-${month}`;
-    case "day":
-      return `${year}-${month}-${day}`;
-    case "hour":
-      return `${year}-${month}-${day} ${hour}`;
-    case "minute":
-      return `${year}-${month}-${day} ${hour}:${minute}`;
-    case "second":
-    default:
-      return second;
-  }
-}
-
-function extractBodyText(part) {
-  if (!part) {
-    return "";
-  }
-
-  if (Array.isArray(part.parts) && part.parts.length > 0) {
-    return part.parts.map(extractBodyText).join(" ");
-  }
-
-  return part.body || "";
-}
-
-function normalizeBody(text) {
-  return String(text || "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
-}
-
-// Build a comparison key for a message based on selected fields.
-// This is the first run of duplicate detection - body comparison not included
-
-async function getBodyComparisonKey(messageId) {
-  const fullMessage = await browser.messages.getFull(messageId);
-  return normalizeBody(extractBodyText(fullMessage));
-}
-
-async function getMessageComparisonData(message, settings) {
-  const hdr = await browser.messages.get(message.id);
-  const parts = [];
-
-  if (settings.compareSubject) {
-    parts.push(`subject:${normalizeSubject(hdr.subject)}`);
-  }
-
-  if (settings.compareAuthor) {
-    parts.push(`author:${String(hdr.author || "").trim().toLowerCase()}`);
-  }
-
-  if (settings.compareRecipients) {
-    parts.push(
-      `recipients:${normalizeAddressList(
-        hdr.recipients,
-        settings.stripAndSortAddresses
-      )}`
-    );
-  }
-
-  if (settings.compareCc) {
-    parts.push(
-      `cc:${normalizeAddressList(
-        hdr.ccList,
-        settings.stripAndSortAddresses
-      )}`
-    );
-  }
-
-  if (settings.compareSendTime) {
-    parts.push(`date:${buildSendTimeKey(hdr.date, settings.sendTimeResolution)}`);
-  }
-
-  if (settings.compareMessageId) {
-    parts.push(
-      `messageId:${String(hdr.headerMessageId || hdr.messageId || "")
-        .trim()
-        .toLowerCase()}`
-    );
-  }
-
-  if (settings.compareFolder) {
-    parts.push(
-      `folder:${String(message.folder?.path || message.folder?.name || "")
-        .trim()
-        .toLowerCase()}`
-    );
-  }
-
-  return {
-  id: message.id,
-  subject: String(hdr.subject || "(no subject)"),
-  author: String(hdr.author || ""),
-  folder: String(message.folder?.name || message.folder?.path || ""),
-  date: hdr.date ? new Date(hdr.date).toLocaleString() : "",
-  dateValue: hdr.date ? new Date(hdr.date).getTime() : 0,
-  messageId: String(hdr.headerMessageId || hdr.messageId || ""),
-  size: hdr.size || message.size || "",
-  flags: Array.isArray(message.flags) ? message.flags : [],
-  key: parts.join("|"),
-  };
-}
-
-// Second run: refine duplicate groups by comparing message bodies.
-// Only runs if body comparison is enabled to avoid fetching full messages
-async function filterGroupsByBody(groups) {
-  const bodyFilteredGroups = [];
-
-  for (const group of groups) {
-    if (group.messages.length < 2) {
-      continue;
-    }
-
-    const bodyGroups = new Map();
-
-    for (const message of group.messages) {
-      try {
-        const bodyKey = await getBodyComparisonKey(message.id);
-
-        if (!bodyGroups.has(bodyKey)) {
-          bodyGroups.set(bodyKey, {
-            subject: group.subject,
-            author: group.author,
-            folder: group.folder,
-            date: group.date,
-            dateValue: group.dateValue,
-            count: 0,
-            originalCount: 0,
-            messageIds: [],
-            messages: [],
-          });
-        }
-
-        const bodyGroup = bodyGroups.get(bodyKey);
-        bodyGroup.count += 1;
-        bodyGroup.messageIds.push(message.id);
-        bodyGroup.messages.push(message);
-
-        if (message.isOriginal) {
-          bodyGroup.originalCount += 1;
-        }
-      } catch (error) {
-        console.warn("Failed to compare message body", message.id, error);
-      }
-    }
-
-    bodyFilteredGroups.push(
-      ...[...bodyGroups.values()].filter((bodyGroup) => bodyGroup.count > 1)
-    );
-  }
-
-  return bodyFilteredGroups;
-}
-
 // Cache for dialog window
 let lastScanResults = null;
 let scanInProgress = false;
 let lastScanError = null;
 let currentScanFolderName = null;
-
-const ORIGINALS_FOLDER_KEY = "originalsFolders";
 
 
 browser.runtime.onMessage.addListener((msg) => {
@@ -494,7 +118,7 @@ browser.storage.onChanged.addListener(async (changes, areaName) => {
   const oldPrefs = changes.preferences.oldValue || {};
   const newPrefs = changes.preferences.newValue || {};
 
-  for (const item of TOOLBAR_COMPARISON_ITEMS) {
+  for (const item of menus.TOOLBAR_COMPARISON_ITEMS) {
     if (oldPrefs[item.key] === newPrefs[item.key]) {
       continue;
     }
@@ -518,8 +142,8 @@ async function runDuplicateScan(selectedFolders) {
 
   const settings = await preferences.getSettings();
 
-  const originalsForThisScan = await getOriginalsFolders();
-  await clearOriginalsFolders();
+  const originalsForThisScan = await originals.getOriginalsFolders();
+  await originals.clearOriginalsFolders();
 
   // Track folders marked as "originals" for one-shot duplicate comparison
   const originalFolderKeys = new Set(
@@ -528,16 +152,16 @@ async function runDuplicateScan(selectedFolders) {
 
   let foldersToScan = [];
   for (const folder of selectedFolders) {
-    const collected = await collectFolders(folder, settings.searchSubfolders);
+    const collected = await folders.collectFolders(folder, settings.searchSubfolders);
     foldersToScan.push(...collected);
   }
 
   for (const folder of originalsForThisScan) {
-    const collected = await collectFolders(folder, settings.searchSubfolders);
+    const collected = await folders.collectFolders(folder, settings.searchSubfolders);
     foldersToScan.push(...collected);
   }
 
-  foldersToScan = dedupeFolders(foldersToScan);
+  foldersToScan = folders.dedupeFolders(foldersToScan);
 
   // Skip special folders such as 'trash' unless they are explicitly marked as originals
   foldersToScan = foldersToScan.filter((folder) => {
@@ -547,7 +171,7 @@ async function runDuplicateScan(selectedFolders) {
     return true;
   }
 
-  return !shouldSkipFolder(folder, settings);
+  return !folders.shouldSkipFolder(folder, settings);
   });
 
   if (foldersToScan.length === 0) {
@@ -589,7 +213,7 @@ async function runDuplicateScan(selectedFolders) {
     let allMessages = [];
 
     for (const folder of foldersToScan) {
-      const messages = await getAllMessages(folder);
+      const messages = await folders.getAllMessages(folder);
 
       let filtered = messages;
 
@@ -628,12 +252,12 @@ async function runDuplicateScan(selectedFolders) {
     }
 
     // Process messages with limited concurrency to avoid blocking the UI
-    const comparisons = await mapWithConcurrency(
+    const comparisons = await comparison.mapWithConcurrency(
       allMessages,
-      ENTRY_CONCURRENCY,
+      comparison.ENTRY_CONCURRENCY,
       async (message) => {
         try {
-          const item = await getMessageComparisonData(message, settings);
+          const item = await comparison.getMessageComparisonData(message, settings);
           item.isOriginal = originalFolderKeys.has(message.folder?.path || message.folder?.name);
           return item;
         } catch (e) {
@@ -691,7 +315,7 @@ async function runDuplicateScan(selectedFolders) {
     let groupedValues = [...groups.values()];
 
     if (settings.compareBody) {
-      groupedValues = await filterGroupsByBody(groupedValues);
+      groupedValues = await comparison.filterGroupsByBody(groupedValues);
     }
 
     const hasOriginals = originalsForThisScan.length > 0;
@@ -755,7 +379,7 @@ browser.menus.onClicked.addListener(async (info) => {
     return;
     }
 
-  const toolbarItem = getToolbarComparisonItem(info.menuItemId);
+  const toolbarItem = menus.getToolbarComparisonItem(info.menuItemId);
   if (toolbarItem) {
     await preferences.saveSettings({
       [toolbarItem.key]: info.checked,
@@ -774,8 +398,8 @@ browser.menus.onClicked.addListener(async (info) => {
   }
 
     if (info.menuItemId === "set-originals-folder") {
-    const selectedFolders = getSelectedFolders(info);
-    await setOriginalsFolders(selectedFolders);
+    const selectedFolders = folders.getSelectedFolders(info);
+    await originals.setOriginalsFolders(selectedFolders);
     console.log("Originals folders set:", selectedFolders.map((folder) => folder.name));
     return;
   }
@@ -783,7 +407,7 @@ browser.menus.onClicked.addListener(async (info) => {
   if (info.menuItemId === "tools-set-originals-folder") {
     try {
       const selectedFolders = await browser.mailTabs.getSelectedFolders();
-      await setOriginalsFolders(selectedFolders);
+      await originals.setOriginalsFolders(selectedFolders);
       console.log("Originals folders set:", selectedFolders.map((folder) => folder.name));
     } catch (err) {
       console.error("Failed to set originals folders from Tools menu:", err);
@@ -793,7 +417,7 @@ browser.menus.onClicked.addListener(async (info) => {
 
   if (info.menuItemId !== "log-duplicates") return;
 
-  const selectedFolders = getSelectedFolders(info);
+  const selectedFolders = folders.getSelectedFolders(info);
   await runDuplicateScan(selectedFolders);
 
 });

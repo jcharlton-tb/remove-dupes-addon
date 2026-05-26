@@ -1,4 +1,5 @@
 import { localizeDocument } from "../vendor/i18n.mjs";
+import * as preferences from "../settings.js";
 
 function setCheckbox(id, checked) {
   const el = document.getElementById(id);
@@ -74,7 +75,7 @@ function readForm() {
     skipImapDeleted: getCheckbox("skipImapDeleted"),
     searchSubfolders: getCheckbox("searchSubfolders"),
     reviewBeforeDeletion: getCheckbox("reviewBeforeDeletion"),
-    defaultAction: getRadioValue("defaultAction") || window.DEFAULT_SETTINGS.defaultAction,
+    defaultAction: getRadioValue("defaultAction") || preferences.DEFAULT_SETTINGS.defaultAction,
 
     compareSubject: getCheckbox("compareSubject"),
     compareAuthor: getCheckbox("compareAuthor"),
@@ -88,24 +89,24 @@ function readForm() {
     stripAndSortAddresses: getCheckbox("stripAndSortAddresses"),
     sendTimeResolution: sendTimeResolution
       ? sendTimeResolution.value
-      : window.DEFAULT_SETTINGS.sendTimeResolution,
+      : preferences.DEFAULT_SETTINGS.sendTimeResolution,
   };
 }
 
 async function load() {
-  const settings = await window.getSettings();
+  const settings = await preferences.getSettings();
   populateForm(settings);
 }
 
 async function save() {
   const settings = readForm();
-  await window.saveSettings(settings);
+  await preferences.saveSettings(settings);
   setStatus("saved");
 }
 
 async function resetToDefaults() {
-  populateForm(window.DEFAULT_SETTINGS);
-  await window.saveSettings(window.DEFAULT_SETTINGS);
+  populateForm(preferences.DEFAULT_SETTINGS);
+  await preferences.saveSettings(preferences.DEFAULT_SETTINGS);
   setStatus("defaultsRestored");
 }
 

@@ -26,10 +26,11 @@ export const DEFAULT_SETTINGS = {
   }
   
   export async function saveSettings(updates) {
-    await currentSettings = await getSettings();
-    const preferences = ( ...currentSettings, ...updates) };
+    const currentSettings = await getSettings();
+    const preferences = {...currentSettings, ...updates };
 
     await browser.storage.local.set({ preferences })
+  }
   
   function getComparisonMenuItems(settings) {
   return [
@@ -84,8 +85,4 @@ export const DEFAULT_SETTINGS = {
   ];
 }
 
-  const COMPARISON_MENU_ITEMS = getComparisonMenuItems(DEFAULT_SETTINGS);
-
-window.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
-window.getSettings = getSettings;
-window.saveSettings = saveSettings;
+ // const COMPARISON_MENU_ITEMS = getComparisonMenuItems(DEFAULT_SETTINGS);
