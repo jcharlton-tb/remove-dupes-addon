@@ -38,6 +38,23 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
+function originalsWereUsed() {
+  return Array.isArray(data?.originalsFolderNames) && data.originalsFolderNames.length > 0;
+}
+
+function updateDeleteSelectedButton() {
+  const deleteSelectedBtn = document.getElementById("delete-selected");
+
+  if (!deleteSelectedBtn) {
+    return;
+  }
+
+  const hasMessagesToDelete = (data?.rows || []).some((row) =>
+    (row.messages || []).some((message) => message.action === "delete")
+  );
+
+  deleteSelectedBtn.disabled = !hasMessagesToDelete;
+}
 
 function renderRowsChunked(tbody, rows, chunkSize = 1, token) {
   tbody.textContent = ""; 
@@ -63,8 +80,8 @@ function renderRowsChunked(tbody, rows, chunkSize = 1, token) {
         const deleteChecked = message.action === "delete" ? "checked" : "";
         const originalMessageLabel = browser.i18n.getMessage("originalMessageLabel") || "Original";
         const originalLabel = message.isOriginal
-        ? ` <strong>(${escapeHtml(originalMessageLabel)})</strong>`
-         : "";
+        ? ` <span class="original-badge">${escapeHtml(originalMessageLabel)}</span>`
+        : "";
 
         html += `<tr class="message-row" data-message-id="${escapeHtml(message.id)}">
           <td colspan="5">
@@ -81,7 +98,7 @@ function renderRowsChunked(tbody, rows, chunkSize = 1, token) {
             </div>
 
             <div class="message-meta">
-              <strong>${escapeHtml(message.subject)}</strong>${originalLabel}<br>
+              ${originalLabel}<strong>${escapeHtml(message.subject)}</strong><br>
               ${escapeHtml(message.author)}<br>
               ${escapeHtml(message.folder)} • ${escapeHtml(message.date)}
             </div>
@@ -238,6 +255,12 @@ scanSummary.textContent = summaryText;
   }
 
   if (data.noCriteriaSelected) {
+    const deleteSelectedBtn = document.getElementById("delete-selected");
+
+    if (deleteSelectedBtn) {
+      deleteSelectedBtn.disabled = true;
+    }
+
     tbody.innerHTML = `
       <tr>
         <td colspan="5" style="text-align:center; padding: 16px;">
@@ -249,6 +272,12 @@ scanSummary.textContent = summaryText;
   }
 
   if (rows.length === 0) {
+    const deleteSelectedBtn = document.getElementById("delete-selected");
+
+    if (deleteSelectedBtn) {
+      deleteSelectedBtn.disabled = true;
+    }
+
     tbody.innerHTML = `
       <tr>
         <td colspan="5" style="text-align:center; padding: 16px;">
@@ -295,12 +324,78 @@ async function init() {
   const authorBtn = document.getElementById("sort-author");
   const folderBtn = document.getElementById("sort-folder");
   const dateBtn = document.getElementById("sort-date");
+  const keepFirstBtn = document.getElementById("keep-first");
+  const keepLastBtn = document.getElementById("keep-last");
+  const markAllDeleteBtn = document.getElementById("delete-duplicates");
+  const resetChoicesBtn = document.getElementById("reset-choices");
 
   if (subjectBtn) subjectBtn.addEventListener("click", () => toggleSort("subject"));
   if (countBtn) countBtn.addEventListener("click", () => toggleSort("count"));
   if (authorBtn) authorBtn.addEventListener("click", () => toggleSort("author"));
   if (folderBtn) folderBtn.addEventListener("click", () => toggleSort("folder"));
   if (dateBtn) dateBtn.addEventListener("click", () => toggleSort("date"));
+  if (keepFirstBtn) {
+    keepFirstBtn.addEventListener("click", async () => {
+      if (originalsWereUsed()) return;
+
+      for (const row of data?.rows || []) {
+        for (const [index, message] of (row.messages || []).entries()) {
+          message.action = index === 0 ? "keep" : "delete";
+        }
+      }
+
+      await render();
+      updateDeleteSelectedButton();
+    });
+  }
+
+  if (keepLastBtn) {
+    keepLastBtn.addEventListener("click", async () => {
+      if (originalsWereUsed()) return;
+
+      for (const row of data?.rows || []) {
+        const messages = row.messages || [];
+        const lastIndex = messages.length - 1;
+
+        for (const [index, message] of messages.entries()) {
+          message.action = index === lastIndex ? "keep" : "delete";
+        }
+      }
+
+      await render();
+      updateDeleteSelectedButton();
+    });
+  }
+
+  if (markAllDeleteBtn) {
+    markAllDeleteBtn.addEventListener("click", async () => {
+      if (originalsWereUsed()) return;
+
+      for (const row of data?.rows || []) {
+        for (const message of row.messages || []) {
+          message.action = "delete";
+        }
+      }
+
+        await render();
+        updateDeleteSelectedButton();
+    });
+  }
+
+  if (resetChoicesBtn) {
+    resetChoicesBtn.addEventListener("click", async () => {
+      if (originalsWereUsed()) return;
+
+      for (const row of data?.rows || []) {
+        for (const [index, message] of (row.messages || []).entries()) {
+          message.action = index === 0 ? "keep" : "delete";
+        }
+      }
+
+      await render();
+      updateDeleteSelectedButton();
+    });
+  }
 
   const tbody = document.getElementById("rows");
 
@@ -327,21 +422,7 @@ async function init() {
         }
       }
 
-      const deleteSelectedBtn = document.getElementById("delete-selected");
-
-      if (deleteSelectedBtn) {
-        const hasMessagesToDelete = (data?.rows || []).some((row) =>
-        (row.messages || []).some((m) => m.action === "delete")
-        );
-
-        deleteSelectedBtn.disabled = !hasMessagesToDelete;
-      }
-    });
-    
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        browser.runtime.sendMessage({ type: "abort-scan" });
-      }
+      updateDeleteSelectedButton();
     });
   }
 
@@ -405,13 +486,16 @@ async function init() {
   await waitForResults();
   await render();
 
-  if (deleteSelectedBtn) {
-    const hasMessagesToDelete = (data?.rows || []).some((row) =>
-    (row.messages || []).some((m) => m.action === "delete")
-    );
-
-    deleteSelectedBtn.disabled = !hasMessagesToDelete;
+  if (originalsWereUsed()) {
+    for (const id of ["keep-first", "keep-last", "delete-duplicates", "reset-choices"]) {
+      const button = document.getElementById(id);
+      if (button) {
+        button.disabled = true;
+      }
+    }
   }
+
+  updateDeleteSelectedButton();
 }
 
 init().catch((err) => {

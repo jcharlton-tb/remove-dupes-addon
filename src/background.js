@@ -80,6 +80,15 @@ browser.menus.onShown.addListener(async (info) => {
 
   const shouldDisable = !folder || folder.isRoot === true;
 
+  const folderKey = folder?.path || folder?.name;
+  const isOriginalsFolder = originalsFolders.some(
+    (originalFolder) => (originalFolder.path || originalFolder.name) === folderKey
+  );
+
+  const originalsTitle = isOriginalsFolder
+  ? `✓ ${browser.i18n.getMessage("originalsFolderMenu")}`
+  : browser.i18n.getMessage("originalsFolderMenu");
+
   await browser.menus.update("log-duplicates", {
     enabled: !shouldDisable,
     visible: true,
@@ -88,6 +97,7 @@ browser.menus.onShown.addListener(async (info) => {
   await browser.menus.update("set-originals-folder", {
     enabled: !shouldDisable,
     visible: true,
+    title: originalsTitle,
   });
 
 browser.menus.refresh();
@@ -301,6 +311,9 @@ function normalizeBody(text) {
     .toLowerCase();
 }
 
+// Build a comparison key for a message based on selected fields.
+// This is the first run of duplicate detection - body comparison not included
+
 async function getBodyComparisonKey(messageId) {
   const fullMessage = await browser.messages.getFull(messageId);
   return normalizeBody(extractBodyText(fullMessage));
@@ -370,6 +383,8 @@ async function getMessageComparisonData(message, settings) {
   };
 }
 
+// Second run: refine duplicate groups by comparing message bodies.
+// Only runs if body comparison is enabled to avoid fetching full messages
 async function filterGroupsByBody(groups) {
   const bodyFilteredGroups = [];
 
@@ -490,6 +505,7 @@ async function runDuplicateScan(selectedFolders) {
   const originalsForThisScan = originalsFolders;
   originalsFolders = [];
 
+  // Track folders marked as "originals" for one-shot duplicate comparison
   const originalFolderKeys = new Set(
   originalsForThisScan.map((folder) => folder.path || folder.name)
   );
@@ -506,6 +522,8 @@ async function runDuplicateScan(selectedFolders) {
   }
 
   foldersToScan = dedupeFolders(foldersToScan);
+
+  // Skip special folders such as 'trash' unless they are explicitly marked as originals
   foldersToScan = foldersToScan.filter((folder) => {
   const key = folder.path || folder.name;
 
@@ -593,6 +611,7 @@ async function runDuplicateScan(selectedFolders) {
       return;
     }
 
+    // Process messages with limited concurrency to avoid blocking the UI
     const comparisons = await mapWithConcurrency(
       allMessages,
       ENTRY_CONCURRENCY,
@@ -607,6 +626,8 @@ async function runDuplicateScan(selectedFolders) {
         }
       }
     );
+
+// Group messages by comparison key, the first run using selected fields
 
     const groups = new Map();
 
@@ -650,6 +671,7 @@ async function runDuplicateScan(selectedFolders) {
       }
     }
 
+  // Convert grouped map to array and optionally refine using body comparison
     let groupedValues = [...groups.values()];
 
     if (settings.compareBody) {
@@ -658,6 +680,7 @@ async function runDuplicateScan(selectedFolders) {
 
     const hasOriginals = originalsForThisScan.length > 0;
 
+// Build final rows for dialog display and apply keep/delete 
     const rows = groupedValues
     .filter((group) => {
       if (hasOriginals) {

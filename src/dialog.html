@@ -114,8 +114,30 @@
 
     .footer {
       display: flex;
-      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
       margin-top: 16px;
+    }
+
+    .footer-left {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 12px;
+      align-items: center;
+      max-width: 58%;
+    }
+
+    .footer-left wa-button::part(base) {
+      font-size: 0.9rem;
+      padding: 4px 6px;
+    }
+
+    .footer-middle {
+      margin-left: auto;
+    }
+
+    .footer-right {
+      margin-left: 8px;
     }
 
     wa-button[variant="primary"]::part(base) {
@@ -197,6 +219,16 @@
     .message-meta {
       line-height: 1.4;
     }
+
+    .original-badge {
+      display: inline-block;
+      margin-right: 6px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: #dce9ff;
+      font-weight: 700;
+      font-size: 0.85em;
+    }
   </style>
 </head>
 
@@ -260,7 +292,25 @@
 
     <div class="footer">
       <div class="footer-left">
-        <wa-button variant="primary" id="delete-selected" type="button">
+        <wa-button variant="text" size="small" id="keep-first" type="button" data-i18n-content="keepFirstInEachGroup">
+          Keep first in each group
+        </wa-button>
+
+        <wa-button variant="text" size="small" id="keep-last" type="button" data-i18n-content="keepLastInEachGroup">
+          Keep last in each group
+        </wa-button>
+
+        <wa-button variant="text" size="small" id="delete-duplicates" type="button" data-i18n-content="deleteAllDuplicates">
+          Mark duplicates for deletion
+        </wa-button>
+
+        <wa-button variant="text" size="small" id="reset-choices" type="button" data-i18n-content="resetReviewChoices">
+          Reset choices
+        </wa-button>
+      </div>
+
+      <div class = "footer-middle">
+         <wa-button variant="primary" id="delete-selected" type="button" data-i18n-content="deleteSelected">
           Delete selected
         </wa-button>
       </div>
