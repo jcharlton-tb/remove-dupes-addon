@@ -134,249 +134,7 @@ browser.storage.onChanged.addListener(async (changes, areaName) => {
   browser.menus.refresh();
 });
 
-async function runDuplicateScan(selectedFolders) {
-  if (!Array.isArray(selectedFolders) || selectedFolders.length === 0) {
-    return;
-  }
 
-  const settings = await preferences.getSettings();
-
-  const originalsForThisScan = await originals.getOriginalsFolders();
-  await originals.clearOriginalsFolders();
-
-  // Track folders marked as "originals" for one-shot duplicate comparison
-  const originalFolderKeys = new Set(
-  originalsForThisScan.map((folder) => folder.path || folder.name)
-  );
-
-  let foldersToScan = [];
-  for (const folder of selectedFolders) {
-    const collected = await folders.collectFolders(folder, settings.searchSubfolders);
-    foldersToScan.push(...collected);
-  }
-
-  for (const folder of originalsForThisScan) {
-    const collected = await folders.collectFolders(folder, settings.searchSubfolders);
-    foldersToScan.push(...collected);
-  }
-
-  foldersToScan = folders.dedupeFolders(foldersToScan);
-
-  // Skip special folders such as 'trash' unless they are explicitly marked as originals
-  foldersToScan = foldersToScan.filter((folder) => {
-  const key = folder.path || folder.name;
-
-  if (originalFolderKeys.has(key)) {
-    return true;
-  }
-
-  return !folders.shouldSkipFolder(folder, settings);
-  });
-
-  if (foldersToScan.length === 0) {
-    return;
-  }
-
-  currentScanFolderName =
-    foldersToScan.length === 1
-      ? foldersToScan[0].name
-      : `${foldersToScan[0].name} + ${foldersToScan.length - 1} more`;
-
-  const hasAnyCriteria =
-    settings.compareSubject ||
-    settings.compareAuthor ||
-    settings.compareRecipients ||
-    settings.compareCc ||
-    settings.compareSendTime ||
-    settings.compareMessageId ||
-    settings.compareFolder ||
-    settings.compareBody;
-
-  scanInProgress = true;
-  lastScanResults = null;
-  lastScanError = null;
-
-  await browser.windows.create({
-    url: browser.runtime.getURL("dialog.html"),
-    type: "popup",
-    width: 900,
-    height: 650,
-  });
-
-  try {
-    console.log(
-      "Scanning folders:",
-      foldersToScan.map((folder) => folder.name)
-    );
-
-    let allMessages = [];
-
-    for (const folder of foldersToScan) {
-      const messages = await folders.getAllMessages(folder);
-
-      let filtered = messages;
-
-      if (settings.skipImapDeleted) {
-        filtered = filtered.filter(
-          (message) =>
-            !(Array.isArray(message.flags) && message.flags.includes("deleted"))
-        );
-      }
-
-      switch (settings.searchScope) {
-        case "unread":
-          filtered = filtered.filter((message) => !message.read);
-          break;
-        case "all":
-        default:
-          break;
-      }
-
-      allMessages.push(...filtered);
-
-      console.log("Messages in folder", folder.name, filtered.length);
-      console.log("Total messaages so far", allMessages.length);
-    }
-
-    
-
-    if (!hasAnyCriteria) {
-      lastScanResults = {
-        folderName:
-          foldersToScan.length === 1
-            ? foldersToScan[0].name
-            : `${foldersToScan.length} folders`,
-        scannedCount: allMessages.length,
-        duplicateGroupCount: 0,
-        rows: [],
-        noCriteriaSelected: true,
-        originalsFolderNames: originalsForThisScan.map((f) => f.name),
-      };
-      return;
-    }
-
-    // Process messages with limited concurrency to avoid blocking the UI
-    const comparisons = await comparison.mapWithConcurrency(
-      allMessages,
-      comparison.ENTRY_CONCURRENCY,
-      async (message) => {
-        try {
-          const item = await comparison.getMessageComparisonData(message, settings);
-          item.isOriginal = originalFolderKeys.has(message.folder?.path || message.folder?.name);
-          return item;
-        } catch (e) {
-          console.warn("Failed to process message", message.id, e);
-          return null;
-        }
-      }
-    );
-
-// Group messages by comparison key, the first run using selected fields
-
-    const groups = new Map();
-
-    for (const item of comparisons) {
-      if (!item || !item.key) {
-        continue;
-      }
-
-      if (!groups.has(item.key)) {
-        groups.set(item.key, {
-          subject: item.subject,
-          author: item.author,
-          folder: item.folder,
-          date: item.date,
-          dateValue: item.dateValue,
-          count: 0,
-          originalCount: 0,
-          messageIds: [],
-          messages: [],
-        });
-      }
-
-      const group = groups.get(item.key);
-      group.count += 1;
-      group.messageIds.push(item.id);
-      group.messages.push({
-        id: item.id,
-        subject: item.subject,
-        author: item.author,
-        folder: item.folder,
-        date: item.date,
-        dateValue: item.dateValue,
-        messageId: item.messageId,
-        size: item.size,
-        flags: item.flags,
-        isOriginal: item.isOriginal === true,
-      });
-      
-      if (item.isOriginal) {
-        group.originalCount += 1;
-      }
-    }
-
-  // Convert grouped map to array and optionally refine using body comparison
-    let groupedValues = [...groups.values()];
-
-    if (settings.compareBody) {
-      groupedValues = await comparison.filterGroupsByBody(groupedValues);
-    }
-
-    const hasOriginals = originalsForThisScan.length > 0;
-
-// Build final rows for dialog display and apply keep/delete 
-    const rows = groupedValues
-    .filter((group) => {
-      if (hasOriginals) {
-        return group.originalCount > 0 && group.count > group.originalCount;
-      }
-
-    return group.count > 1;
-    })
-
-    .map((group) => {
-      const messages = group.messages.map((message, index) => ({
-        ...message,
-        action: hasOriginals
-        ? (message.isOriginal ? "keep" : "delete")
-        : (index === 0 ? "keep" : "delete"),
-      }));
-
-      return {
-        subject: group.subject,
-        author: group.author,
-        folder: group.folder,
-        date: group.date,
-        dateValue: group.dateValue,
-        count: group.count,
-        messageIds: group.messageIds,
-        messages,
-      };
-    })
-
-    .sort((a, b) => b.count - a.count);
-
-    console.log("Duplicate rows", rows.length);
-
-    lastScanResults = {
-      folderName:
-        foldersToScan.length === 1
-          ? foldersToScan[0].name
-          : `${foldersToScan.length} folders`,
-      scannedCount: allMessages.length,
-      duplicateGroupCount: rows.length,
-      rows,
-      noDuplicatesFound: rows.length === 0,
-      originalsFolderNames: originalsForThisScan.map((f) => f.name),
-    };
-  } catch (err) {
-    console.error("Scan failed:", err);
-    lastScanError = String(err);
-  } finally {
-    scanInProgress = false;
-    currentScanFolderName = null;
-  }
-}
 
 // Menu option 
 browser.menus.onClicked.addListener(async (info) => {
@@ -395,8 +153,21 @@ browser.menus.onClicked.addListener(async (info) => {
 
     if (info.menuItemId === "tools-remove-duplicates") {
     try {
-      const selectedFolders = await browser.mailTabs.getSelectedFolders();
-      await runDuplicateScan(selectedFolders);
+      const [activeTab] = await browser.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+
+      await browser.storage.local.set({
+        scanMailTabId: activeTab.id,
+      });
+
+      await browser.windows.create({
+        url: browser.runtime.getURL("dialog.html"),
+        type: "popup",
+        width: 900,
+        height: 650,
+      })
     } catch (err) {
       console.error("Tools menu scan failed:", err);
     }
@@ -423,8 +194,21 @@ browser.menus.onClicked.addListener(async (info) => {
 
   if (info.menuItemId !== "log-duplicates") return;
 
-  const selectedFolders = folders.getSelectedFolders(info);
-  await runDuplicateScan(selectedFolders);
+  const [activeTab] = await browser.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+
+      await browser.storage.local.set({
+        scanMailTabId: activeTab.id,
+      });
+
+  await browser.windows.create({
+        url: browser.runtime.getURL("dialog.html"),
+        type: "popup",
+        width: 900,
+        height: 650,
+      })
 
 });
 
@@ -433,8 +217,22 @@ if (browser.commands && browser.commands.onCommand) {
     if (command !== "run-duplicate-scan") return;
 
     try {
-      const selectedFolders = await browser.mailTabs.getSelectedFolders();
-      await runDuplicateScan(selectedFolders);
+
+      const [activeTab] = await browser.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+
+      await browser.storage.local.set({
+        scanMailTabId: activeTab.id,
+      });
+      
+      await browser.windows.create({
+        url: browser.runtime.getURL("dialog.html"),
+        type: "popup",
+        width: 900,
+        height: 650,
+      })
     } catch (err) {
       console.error("Command failed:", err);
     }
@@ -445,8 +243,22 @@ if (browser.commands && browser.commands.onCommand) {
 
 browser.browserAction.onClicked.addListener(async () => {
   try {
-    const selectedFolders = await browser.mailTabs.getSelectedFolders();
-    await runDuplicateScan(selectedFolders);
+
+    const [activeTab] = await browser.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+
+      await browser.storage.local.set({
+        scanMailTabId: activeTab.id,
+      });
+
+    await browser.windows.create({
+        url: browser.runtime.getURL("dialog.html"),
+        type: "popup",
+        width: 900,
+        height: 650,
+      })
   } catch (err) {
     console.error("Toolbar click scan failed:", err);
   }
