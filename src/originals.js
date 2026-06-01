@@ -1,4 +1,4 @@
-const ORIGINALS_FOLDER_KEY = "originalsFolders";
+export const ORIGINALS_FOLDER_KEY = "originalsFolders";
 
 export async function setOriginalsFolders(folders) {
   await browser.storage.local.set({

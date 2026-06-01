@@ -9,6 +9,7 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 
 let data = null;
+let scanFolders = [];
 
 // default sort: highest count first
 let sort = { key: "count", dir: "desc" };
@@ -390,207 +391,207 @@ async function runDuplicateScan(selectedFolders) {
   const settings = await preferences.getSettings();
 
   const originalsForThisScan = await originals.getOriginalsFolders();
-  await originals.clearOriginalsFolders();
+  await originals.clearOriginalsFolders();  
 
-  // Track folders marked as "originals" for one-shot duplicate comparison
-  const originalFolderKeys = new Set(
-    originalsForThisScan.map((folder) => folder.path || folder.name)
+// Track folders marked as "originals" for one-shot duplicate comparison
+const originalFolderKeys = new Set(
+  originalsForThisScan.map((folder) => folder.path || folder.name)
+);
+
+let foldersToScan = [];
+for (const folder of selectedFolders) {
+  const collected = await folders.collectFolders(folder, settings.searchSubfolders);
+  foldersToScan.push(...collected);
+}
+
+for (const folder of originalsForThisScan) {
+  const collected = await folders.collectFolders(folder, settings.searchSubfolders);
+  foldersToScan.push(...collected);
+}
+
+foldersToScan = folders.dedupeFolders(foldersToScan);
+
+// Skip special folders such as 'trash' unless they are explicitly marked as originals
+foldersToScan = foldersToScan.filter((folder) => {
+  const key = folder.path || folder.name;
+
+  if (originalFolderKeys.has(key)) {
+    return true;
+  }
+
+  return !folders.shouldSkipFolder(folder, settings);
+});
+
+if (foldersToScan.length === 0) {
+  return;
+}
+
+const hasAnyCriteria =
+  settings.compareSubject ||
+  settings.compareAuthor ||
+  settings.compareRecipients ||
+  settings.compareCc ||
+  settings.compareSendTime ||
+  settings.compareMessageId ||
+  settings.compareFolder ||
+  settings.compareBody;
+
+data = null;
+
+try {
+  console.log(
+    "Scanning folders:",
+    foldersToScan.map((folder) => folder.name)
   );
 
-  let foldersToScan = [];
-  for (const folder of selectedFolders) {
-    const collected = await folders.collectFolders(folder, settings.searchSubfolders);
-    foldersToScan.push(...collected);
+  let allMessages = [];
+
+  for (const folder of foldersToScan) {
+    const messages = await folders.getAllMessages(folder);
+
+    let filtered = messages;
+
+    if (settings.skipImapDeleted) {
+      filtered = filtered.filter(
+        (message) =>
+          !(Array.isArray(message.flags) && message.flags.includes("deleted"))
+      );
+    }
+
+    switch (settings.searchScope) {
+      case "unread":
+        filtered = filtered.filter((message) => !message.read);
+        break;
+      case "all":
+      default:
+        break;
+    }
+
+    allMessages.push(...filtered);
+
+    console.log("Messages in folder", folder.name, filtered.length);
+    console.log("Total messaages so far", allMessages.length);
   }
 
-  for (const folder of originalsForThisScan) {
-    const collected = await folders.collectFolders(folder, settings.searchSubfolders);
-    foldersToScan.push(...collected);
-  }
-
-  foldersToScan = folders.dedupeFolders(foldersToScan);
-
-  // Skip special folders such as 'trash' unless they are explicitly marked as originals
-  foldersToScan = foldersToScan.filter((folder) => {
-    const key = folder.path || folder.name;
-
-    if (originalFolderKeys.has(key)) {
-      return true;
-    }
-
-    return !folders.shouldSkipFolder(folder, settings);
-  });
-
-  if (foldersToScan.length === 0) {
-    return;
-  }
-
-  const hasAnyCriteria =
-    settings.compareSubject ||
-    settings.compareAuthor ||
-    settings.compareRecipients ||
-    settings.compareCc ||
-    settings.compareSendTime ||
-    settings.compareMessageId ||
-    settings.compareFolder ||
-    settings.compareBody;
-
-  data = null;
-
-  try {
-    console.log(
-      "Scanning folders:",
-      foldersToScan.map((folder) => folder.name)
-    );
-
-    let allMessages = [];
-
-    for (const folder of foldersToScan) {
-      const messages = await folders.getAllMessages(folder);
-
-      let filtered = messages;
-
-      if (settings.skipImapDeleted) {
-        filtered = filtered.filter(
-          (message) =>
-            !(Array.isArray(message.flags) && message.flags.includes("deleted"))
-        );
-      }
-
-      switch (settings.searchScope) {
-        case "unread":
-          filtered = filtered.filter((message) => !message.read);
-          break;
-        case "all":
-        default:
-          break;
-      }
-
-      allMessages.push(...filtered);
-
-      console.log("Messages in folder", folder.name, filtered.length);
-      console.log("Total messaages so far", allMessages.length);
-    }
 
 
-
-    if (!hasAnyCriteria) {
-      data = {
-        folderName:
-          foldersToScan.length === 1
-            ? foldersToScan[0].name
-            : `${foldersToScan.length} folders`,
-        scannedCount: allMessages.length,
-        duplicateGroupCount: 0,
-        rows: [],
-        noCriteriaSelected: true,
-        originalsFolderNames: originalsForThisScan.map((f) => f.name),
-      };
-      return;
-    }
-
-    // Process messages with limited concurrency to avoid blocking the UI
-    const groups = new Map();
-
-    for (const message of allMessages) {
-      let item = null;
-
-      try {
-        item = await comparison.getMessageComparisonData(message, settings);
-        item.isOriginal = originalFolderKeys.has(message.folder?.path || message.folder?.name);
-      } catch (e) {
-        console.warn("Failed to process message", message.id, e);
-        continue;
-      }
-
-      if (!item || !item.key) {
-        continue;
-      }
-
-      if (!groups.has(item.key)) {
-        groups.set(item.key, {
-          subject: item.subject,
-          author: item.author,
-          folder: item.folder,
-          date: item.date,
-          dateValue: item.dateValue,
-          count: 0,
-          originalCount: 0,
-          messageIds: [],
-          messages: [],
-        });
-      }
-
-      const group = groups.get(item.key);
-      group.count += 1;
-      group.messageIds.push(item.id);
-      group.messages.push({
-        id: item.id,
-        subject: item.subject,
-        author: item.author,
-        folder: item.folder,
-        date: item.date,
-        dateValue: item.dateValue,
-        messageId: item.messageId,
-        size: item.size,
-        flags: item.flags,
-        isOriginal: item.isOriginal === true,
-      });
-
-      if (item.isOriginal) {
-        group.originalCount += 1;
-      }
-
-      if (groups.size > 0 && group.count > 1 && allMessages.indexOf(message) % 25 === 0) {
-        const groupedValues = [...groups.values()];
-        const hasOriginals = originalsForThisScan.length > 0;
-        const rows = buildRowsFromGroups(groupedValues, hasOriginals);
-
-        data = {
-          folderName:
-            foldersToScan.length === 1
-              ? foldersToScan[0].name
-              : `${foldersToScan.length} folders`,
-          scannedCount: allMessages.length,
-          duplicateGroupCount: rows.length,
-          rows,
-          partial: true,
-          originalsFolderNames: originalsForThisScan.map((f) => f.name),
-        };
-
-        await render();
-      }
-    }
-
-    // Convert grouped map to array and optionally refine using body comparison
-    let groupedValues = [...groups.values()];
-
-    if (settings.compareBody) {
-      groupedValues = await comparison.filterGroupsByBody(groupedValues);
-    }
-
-    const hasOriginals = originalsForThisScan.length > 0;
-
-    // Build final rows for dialog display and apply keep/delete 
-    const rows = buildRowsFromGroups(groupedValues, hasOriginals);
-
-    console.log("Duplicate rows", rows.length);
-
+  if (!hasAnyCriteria) {
     data = {
       folderName:
         foldersToScan.length === 1
           ? foldersToScan[0].name
           : `${foldersToScan.length} folders`,
       scannedCount: allMessages.length,
-      duplicateGroupCount: rows.length,
-      rows,
-      noDuplicatesFound: rows.length === 0,
+      duplicateGroupCount: 0,
+      rows: [],
+      noCriteriaSelected: true,
       originalsFolderNames: originalsForThisScan.map((f) => f.name),
     };
-  } catch (err) {
-    console.error("Scan failed:", err);
-    throw err;
+    return;
   }
+
+  // Process messages with limited concurrency to avoid blocking the UI
+  const groups = new Map();
+
+  for (const message of allMessages) {
+    let item = null;
+
+    try {
+      item = await comparison.getMessageComparisonData(message, settings);
+      item.isOriginal = originalFolderKeys.has(message.folder?.path || message.folder?.name);
+    } catch (e) {
+      console.warn("Failed to process message", message.id, e);
+      continue;
+    }
+
+    if (!item || !item.key) {
+      continue;
+    }
+
+    if (!groups.has(item.key)) {
+      groups.set(item.key, {
+        subject: item.subject,
+        author: item.author,
+        folder: item.folder,
+        date: item.date,
+        dateValue: item.dateValue,
+        count: 0,
+        originalCount: 0,
+        messageIds: [],
+        messages: [],
+      });
+    }
+
+    const group = groups.get(item.key);
+    group.count += 1;
+    group.messageIds.push(item.id);
+    group.messages.push({
+      id: item.id,
+      subject: item.subject,
+      author: item.author,
+      folder: item.folder,
+      date: item.date,
+      dateValue: item.dateValue,
+      messageId: item.messageId,
+      size: item.size,
+      flags: item.flags,
+      isOriginal: item.isOriginal === true,
+    });
+
+    if (item.isOriginal) {
+      group.originalCount += 1;
+    }
+
+    if (groups.size > 0 && group.count > 1 && allMessages.indexOf(message) % 25 === 0) {
+      const groupedValues = [...groups.values()];
+      const hasOriginals = originalsForThisScan.length > 0;
+      const rows = buildRowsFromGroups(groupedValues, hasOriginals);
+
+      data = {
+        folderName:
+          foldersToScan.length === 1
+            ? foldersToScan[0].name
+            : `${foldersToScan.length} folders`,
+        scannedCount: allMessages.length,
+        duplicateGroupCount: rows.length,
+        rows,
+        partial: true,
+        originalsFolderNames: originalsForThisScan.map((f) => f.name),
+      };
+
+      await render();
+    }
+  }
+
+  // Convert grouped map to array and optionally refine using body comparison
+  let groupedValues = [...groups.values()];
+
+  if (settings.compareBody) {
+    groupedValues = await comparison.filterGroupsByBody(groupedValues);
+  }
+
+  const hasOriginals = originalsForThisScan.length > 0;
+
+  // Build final rows for dialog display and apply keep/delete 
+  const rows = buildRowsFromGroups(groupedValues, hasOriginals);
+
+  console.log("Duplicate rows", rows.length);
+
+  data = {
+    folderName:
+      foldersToScan.length === 1
+        ? foldersToScan[0].name
+        : `${foldersToScan.length} folders`,
+    scannedCount: allMessages.length,
+    duplicateGroupCount: rows.length,
+    rows,
+    noDuplicatesFound: rows.length === 0,
+    originalsFolderNames: originalsForThisScan.map((f) => f.name),
+  };
+} catch (err) {
+  console.error("Scan failed:", err);
+  throw err;
+}
 }
 
 async function init() {
@@ -762,12 +763,13 @@ async function init() {
     scanMailTabId: null,
   });
 
-  const selectedFolders = await browser.mailTabs.getSelectedFolders(scanMailTabId);
+  scanFolders = await browser.mailTabs.getSelectedFolders(scanMailTabId);
 
   await browser.storage.local.remove("scanMailTabId");
 
-  await runDuplicateScan(selectedFolders);
+  await runDuplicateScan(scanFolders);
   await render();
+  updateDeleteSelectedButton();
 
   if (originalsWereUsed()) {
     for (const id of ["keep-first", "keep-last", "delete-duplicates", "reset-choices"]) {

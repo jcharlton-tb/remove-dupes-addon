@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8" />
   <title data-i18n-content="dialogTitle">Duplicate Scan Results</title>
@@ -15,7 +16,7 @@
     body {
       margin: 0;
       font: message-box;
-      background: #ffffff; 
+      background: #ffffff;
       color: var(--wa-color-text-normal, #111);
     }
 
@@ -114,30 +115,27 @@
 
     .footer {
       display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-top: 16px;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 12px;
     }
 
     .footer-left {
       display: flex;
-      flex-wrap: wrap;
-      gap: 4px 12px;
+      flex-wrap: nowrap;
+      gap: 14px;
       align-items: center;
-      max-width: 58%;
     }
 
     .footer-left wa-button::part(base) {
-      font-size: 0.9rem;
-      padding: 4px 6px;
+      font-size: 0.82rem;
+      padding: 2px 4px;
     }
 
-    .footer-middle {
-      margin-left: auto;
-    }
-
-    .footer-right {
-      margin-left: 8px;
+    .footer-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
     }
 
     wa-button[variant="primary"]::part(base) {
@@ -182,9 +180,9 @@
       justify-content: flex-start;
       background: transparent !important;
       border: none;
-      box-shadow: none; 
+      box-shadow: none;
     }
- 
+
     wa-button.active-criterion::part(base) {
       background: #dce9ff !important;
       font-weight: 700;
@@ -193,7 +191,7 @@
     .active-criterion {
       background: #dce9ff !important;
       font-weight: 700;
-    }    
+    }
 
     .group-row {
       font-weight: 600;
@@ -241,13 +239,7 @@
     </div>
 
     <div id="loading" class="loading">
-      <img
-        id="spinner"
-        class="spinner"
-        src="spinner.gif"
-        alt="Loading"
-        data-i18n-alt="loadingAlt"
-      />
+      <img id="spinner" class="spinner" src="spinner.gif" alt="Loading" data-i18n-alt="loadingAlt" />
       <div id="loading-text" data-i18n-content="loadingText">Scanning folder…</div>
     </div>
 
@@ -256,33 +248,33 @@
         <thead>
           <tr>
             <th id="th-subject">
-            <wa-button variant="text" size="small" id="sort-subject" data-i18n-content="subjectColumn">
-              Subject
-            </wa-button>
+              <wa-button variant="text" size="small" id="sort-subject" data-i18n-content="subjectColumn">
+                Subject
+              </wa-button>
             </th>
 
             <th id="th-author">
-            <wa-button variant="text" size="small" id="sort-author">
-            Author
-            </wa-button>
+              <wa-button variant="text" size="small" id="sort-author">
+                Author
+              </wa-button>
             </th>
 
             <th id="th-folder">
-            <wa-button variant="text" size="small" id="sort-folder">
-            Folder
-            </wa-button>
+              <wa-button variant="text" size="small" id="sort-folder">
+                Folder
+              </wa-button>
             </th>
 
             <th id="th-date">
-            <wa-button variant="text" size="small" id="sort-date">
-            Date
-            </wa-button>
+              <wa-button variant="text" size="small" id="sort-date">
+                Date
+              </wa-button>
             </th>
 
             <th id="th-count" class="count" aria-sort="none">
-            <wa-button variant="text" size="small" id="sort-count" data-i18n-content="countColumn">
-              Count
-            </wa-button>
+              <wa-button variant="text" size="small" id="sort-count" data-i18n-content="countColumn">
+                Count
+              </wa-button>
             </th>
           </tr>
         </thead>
@@ -300,7 +292,8 @@
           Keep last in each group
         </wa-button>
 
-        <wa-button variant="text" size="small" id="delete-duplicates" type="button" data-i18n-content="deleteAllDuplicates">
+        <wa-button variant="text" size="small" id="delete-duplicates" type="button"
+          data-i18n-content="deleteAllDuplicates">
           Mark duplicates for deletion
         </wa-button>
 
@@ -309,19 +302,18 @@
         </wa-button>
       </div>
 
-      <div class = "footer-middle">
-         <wa-button variant="primary" id="delete-selected" type="button" data-i18n-content="deleteSelected">
+      <div class="footer-actions">
+        <wa-button variant="primary" id="delete-selected" type="button" data-i18n-content="deleteSelected">
           Delete selected
         </wa-button>
-      </div>
 
-      <div class="footer-right">
         <wa-button variant="primary" id="close" data-i18n-content="close">
           Close
         </wa-button>
       </div>
     </div>
 
-  <script type="module" src="dialog.js"></script>
+    <script type="module" src="dialog.js"></script>
 </body>
+
 </html>
