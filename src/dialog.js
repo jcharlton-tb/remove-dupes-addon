@@ -29,15 +29,6 @@ function setLoading(isLoading, text = browser.i18n.getMessage("loadingText")) {
   }
 }
 
-function escapeHtml(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
 function originalsWereUsed() {
   return Array.isArray(data?.originalsFolderNames) && data.originalsFolderNames.length > 0;
 }
@@ -57,58 +48,110 @@ function updateDeleteSelectedButton() {
 }
 
 function renderRowsChunked(tbody, rows, chunkSize = 1, token) {
-  tbody.textContent = ""; 
+  tbody.textContent = "";
   let i = 0;
 
   function appendChunk() {
     if (token !== renderToken) return;
+
     const end = Math.min(i + chunkSize, rows.length);
-    let html = "";
+    const fragment = document.createDocumentFragment();
 
     for (; i < end; i++) {
       const r = rows[i];
-      html += `<tr class="group-row">
-        <td class="subject">${escapeHtml(r.subject)}</td>
-        <td>${escapeHtml(r.author)}</td>
-        <td>${escapeHtml(r.folder)}</td>
-        <td>${escapeHtml(r.date)}</td>
-        <td class="count">${Number(r.count) || 0}</td>
-      </tr>`;
+
+      const groupRow = document.createElement("tr");
+      groupRow.className = "group-row";
+
+      const subjectCell = document.createElement("td");
+      subjectCell.className = "subject";
+      subjectCell.textContent = r.subject;
+      groupRow.appendChild(subjectCell);
+
+      const authorCell = document.createElement("td");
+      authorCell.textContent = r.author;
+      groupRow.appendChild(authorCell);
+
+      const folderCell = document.createElement("td");
+      folderCell.textContent = r.folder;
+      groupRow.appendChild(folderCell);
+
+      const dateCell = document.createElement("td");
+      dateCell.textContent = r.date;
+      groupRow.appendChild(dateCell);
+
+      const countCell = document.createElement("td");
+      countCell.className = "count";
+      countCell.textContent = String(Number(r.count) || 0);
+      groupRow.appendChild(countCell);
+
+      fragment.appendChild(groupRow);
 
       for (const message of r.messages || []) {
-        const keepChecked = message.action === "keep" ? "checked" : "";
-        const deleteChecked = message.action === "delete" ? "checked" : "";
-        const originalMessageLabel = browser.i18n.getMessage("originalMessageLabel") || "Original";
-        const originalLabel = message.isOriginal
-        ? ` <span class="original-badge">${escapeHtml(originalMessageLabel)}</span>`
-        : "";
+        const messageRow = document.createElement("tr");
+        messageRow.className = "message-row";
+        messageRow.dataset.messageId = String(message.id);
 
-        html += `<tr class="message-row" data-message-id="${escapeHtml(message.id)}">
-          <td colspan="5">
-            <div class="message-review">
-            <div class="message-actions">
-              <label>
-                <input type="radio" name="action-${escapeHtml(message.id)}" value="keep" ${keepChecked}>
-                ${escapeHtml(browser.i18n.getMessage("keepAction"))}
-              </label>
-              <label>
-                <input type="radio" name="action-${escapeHtml(message.id)}" value="delete" ${deleteChecked}>
-                ${escapeHtml(browser.i18n.getMessage("deleteAction"))}
-              </label>
-            </div>
+        const messageCell = document.createElement("td");
+        messageCell.colSpan = 5;
 
-            <div class="message-meta">
-              ${originalLabel}<strong>${escapeHtml(message.subject)}</strong><br>
-              ${escapeHtml(message.author)}<br>
-              ${escapeHtml(message.folder)} • ${escapeHtml(message.date)}
-            </div>
-            </div>
-          </td>
-        </tr>`;
+        const review = document.createElement("div");
+        review.className = "message-review";
+
+        const actions = document.createElement("div");
+        actions.className = "message-actions";
+
+        const keepLabel = document.createElement("label");
+        const keepInput = document.createElement("input");
+        keepInput.type = "radio";
+        keepInput.name = `action-${message.id}`;
+        keepInput.value = "keep";
+        keepInput.checked = message.action === "keep";
+        keepLabel.appendChild(keepInput);
+        keepLabel.append(` ${browser.i18n.getMessage("keepAction")}`);
+
+        const deleteLabel = document.createElement("label");
+        const deleteInput = document.createElement("input");
+        deleteInput.type = "radio";
+        deleteInput.name = `action-${message.id}`;
+        deleteInput.value = "delete";
+        deleteInput.checked = message.action === "delete";
+        deleteLabel.appendChild(deleteInput);
+        deleteLabel.append(` ${browser.i18n.getMessage("deleteAction")}`);
+
+        actions.appendChild(keepLabel);
+        actions.appendChild(deleteLabel);
+
+        const meta = document.createElement("div");
+        meta.className = "message-meta";
+
+        if (message.isOriginal) {
+          const badge = document.createElement("span");
+          badge.className = "original-badge";
+          badge.textContent =
+            browser.i18n.getMessage("originalMessageLabel") || "Original";
+          meta.appendChild(badge);
+          meta.append(" ");
+        }
+
+        const subject = document.createElement("strong");
+        subject.textContent = message.subject;
+        meta.appendChild(subject);
+        meta.appendChild(document.createElement("br"));
+
+        meta.append(message.author);
+        meta.appendChild(document.createElement("br"));
+        meta.append(`${message.folder} • ${message.date}`);
+
+        review.appendChild(actions);
+        review.appendChild(meta);
+        messageCell.appendChild(review);
+        messageRow.appendChild(messageCell);
+        fragment.appendChild(messageRow);
       }
     }
 
-    tbody.insertAdjacentHTML("beforeend", html);
+    tbody.appendChild(fragment);
 
     if (i < rows.length) {
       setTimeout(() => requestAnimationFrame(appendChunk), 200);
@@ -116,7 +159,6 @@ function renderRowsChunked(tbody, rows, chunkSize = 1, token) {
   }
 
   requestAnimationFrame(appendChunk);
-
 }
 
 function compareRows(a, b, key, dir) {
@@ -193,7 +235,7 @@ async function render() {
 
   if (!data) {
     meta.textContent = "";
-    tbody.innerHTML = "";
+    tbody.textContent = "";
     setLoading(true, browser.i18n.getMessage("loadingText"));
     return;
   }
@@ -255,38 +297,50 @@ scanSummary.textContent = summaryText;
   }
 
   if (data.noCriteriaSelected) {
-    const deleteSelectedBtn = document.getElementById("delete-selected");
+  const deleteSelectedBtn = document.getElementById("delete-selected");
 
-    if (deleteSelectedBtn) {
-      deleteSelectedBtn.disabled = true;
-    }
-
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="5" style="text-align:center; padding: 16px;">
-          ${browser.i18n.getMessage("noCriteriaSelected")}
-        </td>
-      </tr>
-    `;
-    return;
+  if (deleteSelectedBtn) {
+    deleteSelectedBtn.disabled = true;
   }
+
+  tbody.textContent = "";
+
+  const row = document.createElement("tr");
+  const cell = document.createElement("td");
+
+  cell.colSpan = 5;
+  cell.style.textAlign = "center";
+  cell.style.padding = "16px";
+  cell.textContent = browser.i18n.getMessage("noCriteriaSelected");
+
+  row.appendChild(cell);
+  tbody.appendChild(row);
+
+  return;
+}
 
   if (rows.length === 0) {
-    const deleteSelectedBtn = document.getElementById("delete-selected");
+  const deleteSelectedBtn = document.getElementById("delete-selected");
 
-    if (deleteSelectedBtn) {
-      deleteSelectedBtn.disabled = true;
-    }
-
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="5" style="text-align:center; padding: 16px;">
-          ${browser.i18n.getMessage("noResults")}
-        </td>
-      </tr>
-    `;
-    return;
+  if (deleteSelectedBtn) {
+    deleteSelectedBtn.disabled = true;
   }
+
+  tbody.textContent = "";
+
+  const row = document.createElement("tr");
+  const cell = document.createElement("td");
+
+  cell.colSpan = 5;
+  cell.style.textAlign = "center";
+  cell.style.padding = "16px";
+  cell.textContent = browser.i18n.getMessage("noResults");
+
+  row.appendChild(cell);
+  tbody.appendChild(row);
+
+  return;
+}
 
   renderToken++;
   const token = renderToken;
