@@ -1,5 +1,5 @@
 // Async per entry processing
-const ENTRY_CONCURRENCY = 8;
+export const ENTRY_CONCURRENCY = 8;
 
 export async function mapWithConcurrency(items, limit, mapper) {
   const results = new Array(items.length);

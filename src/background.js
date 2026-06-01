@@ -34,7 +34,6 @@ browser.menus.create({
 
 // settings menu
 const settings = await preferences.getSettings();
-menus.createToolbarMenus(settings)
 
 menus.createToolbarMenus(settings).catch((error) => {
   console.error("Failed to create toolbar menus:");
@@ -234,7 +233,12 @@ async function runDuplicateScan(selectedFolders) {
       }
 
       allMessages.push(...filtered);
+
+      console.log("Messages in folder", folder.name, filtered.length);
+      console.log("Total messaages so far", allMessages.length);
     }
+
+    
 
     if (!hasAnyCriteria) {
       lastScanResults = {
@@ -351,6 +355,8 @@ async function runDuplicateScan(selectedFolders) {
     })
 
     .sort((a, b) => b.count - a.count);
+
+    console.log("Duplicate rows", rows.length);
 
     lastScanResults = {
       folderName:
