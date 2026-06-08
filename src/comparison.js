@@ -117,34 +117,40 @@ export async function getMessageComparisonData(message, settings) {
   const hdr = await browser.messages.get(message.id);
   const parts = [];
 
+  const missingValue = settings.assumeEachMissingValueIsUnique
+    ? `missing:${message.id}`
+    : "";
+
   if (settings.compareSubject) {
     parts.push(`subject:${normalizeSubject(hdr.subject)}`);
   }
 
   if (settings.compareAuthor) {
-    parts.push(`author:${String(hdr.author || "").trim().toLowerCase()}`);
+    const author = String(hdr.author || "").trim().toLowerCase();
+    parts.push(`author:${author || missingValue}`);
   }
 
   if (settings.compareRecipients) {
-    parts.push(
-      `recipients:${normalizeAddressList(
-        hdr.recipients,
-        settings.stripAndSortAddresses
-      )}`
+    const recipients = normalizeAddressList(
+      hdr.recipients,
+      settings.stripAndSortAddresses
     );
+
+    parts.push(`recipients:${recipients || missingValue}`);
   }
 
   if (settings.compareCc) {
-    parts.push(
-      `cc:${normalizeAddressList(
-        hdr.ccList,
-        settings.stripAndSortAddresses
-      )}`
+    const cc = normalizeAddressList(
+      hdr.ccList,
+      settings.stripAndSortAddresses
     );
+
+    parts.push(`cc:${cc || missingValue}`);
   }
 
   if (settings.compareSendTime) {
-    parts.push(`date:${buildSendTimeKey(hdr.date, settings.sendTimeResolution)}`);
+    const date = buildSendTimeKey(hdr.date, settings.sendTimeResolution);
+    parts.push(`date:${date || missingValue}`);
   }
 
   if (settings.compareMessageId) {
@@ -156,15 +162,15 @@ export async function getMessageComparisonData(message, settings) {
       messageId = "";
     }
 
-    parts.push(`messageId:${messageId}`);
+    parts.push(`messageId:${messageId || missingValue}`);
   }
 
   if (settings.compareFolder) {
-    parts.push(
-      `folder:${String(message.folder?.path || message.folder?.name || "")
-        .trim()
-        .toLowerCase()}`
-    );
+    const folder = String(message.folder?.path || message.folder?.name || "")
+      .trim()
+      .toLowerCase();
+
+    parts.push(`folder:${folder || missingValue}`);
   }
 
   return {

@@ -18,6 +18,7 @@ export const DEFAULT_SETTINGS = {
     sendTimeResolution: "minute", 
 
     allowMd5IdSubstitute: false,
+    assumeEachMissingValueIsUnique: false,
 
     searchScope: "all"
   };

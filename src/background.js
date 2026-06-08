@@ -54,8 +54,8 @@ browser.menus.onShown.addListener(async (info) => {
   );
 
   const originalsTitle = isOriginalsFolder
-  ? `✓ ${browser.i18n.getMessage("originalsFolderMenu")}`
-  : browser.i18n.getMessage("originalsFolderMenu");
+    ? `✓ ${browser.i18n.getMessage("originalsFolderMenu")}`
+    : browser.i18n.getMessage("originalsFolderMenu");
 
   await browser.menus.update("log-duplicates", {
     enabled: !shouldDisable,
@@ -68,7 +68,7 @@ browser.menus.onShown.addListener(async (info) => {
     title: originalsTitle,
   });
 
-browser.menus.refresh();
+  browser.menus.refresh();
 });
 
 // Cache for dialog window
@@ -103,7 +103,9 @@ browser.runtime.onMessage.addListener((msg) => {
       return Promise.resolve();
     }
 
-    return browser.messages.delete(ids);
+    return browser.messages.delete(ids, {
+      deletePermanently: msg.deletePermanently === true,
+    });
   }
 
   return false;
@@ -141,7 +143,7 @@ browser.menus.onClicked.addListener(async (info) => {
   if (info.menuItemId === "open-options") {
     await browser.runtime.openOptionsPage();
     return;
-    }
+  }
 
   const toolbarItem = menus.getToolbarComparisonItem(info.menuItemId);
   if (toolbarItem) {
@@ -151,7 +153,7 @@ browser.menus.onClicked.addListener(async (info) => {
     return;
   }
 
-    if (info.menuItemId === "tools-remove-duplicates") {
+  if (info.menuItemId === "tools-remove-duplicates") {
     try {
       const [activeTab] = await browser.tabs.query({
         active: true,
@@ -174,7 +176,7 @@ browser.menus.onClicked.addListener(async (info) => {
     return;
   }
 
-    if (info.menuItemId === "set-originals-folder") {
+  if (info.menuItemId === "set-originals-folder") {
     const selectedFolders = folders.getSelectedFolders(info);
     await originals.setOriginalsFolders(selectedFolders);
     console.log("Originals folders set:", selectedFolders.map((folder) => folder.name));
@@ -195,20 +197,20 @@ browser.menus.onClicked.addListener(async (info) => {
   if (info.menuItemId !== "log-duplicates") return;
 
   const [activeTab] = await browser.tabs.query({
-        active: true,
-        currentWindow: true,
-      });
+    active: true,
+    currentWindow: true,
+  });
 
-      await browser.storage.local.set({
-        scanMailTabId: activeTab.id,
-      });
+  await browser.storage.local.set({
+    scanMailTabId: activeTab.id,
+  });
 
   await browser.windows.create({
-        url: browser.runtime.getURL("dialog.html"),
-        type: "popup",
-        width: 900,
-        height: 650,
-      })
+    url: browser.runtime.getURL("dialog.html"),
+    type: "popup",
+    width: 900,
+    height: 650,
+  })
 
 });
 
@@ -226,7 +228,7 @@ if (browser.commands && browser.commands.onCommand) {
       await browser.storage.local.set({
         scanMailTabId: activeTab.id,
       });
-      
+
       await browser.windows.create({
         url: browser.runtime.getURL("dialog.html"),
         type: "popup",
@@ -245,20 +247,20 @@ browser.browserAction.onClicked.addListener(async () => {
   try {
 
     const [activeTab] = await browser.tabs.query({
-        active: true,
-        currentWindow: true,
-      });
+      active: true,
+      currentWindow: true,
+    });
 
-      await browser.storage.local.set({
-        scanMailTabId: activeTab.id,
-      });
+    await browser.storage.local.set({
+      scanMailTabId: activeTab.id,
+    });
 
     await browser.windows.create({
-        url: browser.runtime.getURL("dialog.html"),
-        type: "popup",
-        width: 900,
-        height: 650,
-      })
+      url: browser.runtime.getURL("dialog.html"),
+      type: "popup",
+      width: 900,
+      height: 650,
+    })
   } catch (err) {
     console.error("Toolbar click scan failed:", err);
   }
