@@ -17,6 +17,8 @@ export const DEFAULT_SETTINGS = {
     stripAndSortAddresses: true,
     sendTimeResolution: "minute", 
 
+    allowMd5IdSubstitute: false,
+
     searchScope: "all"
   };
   

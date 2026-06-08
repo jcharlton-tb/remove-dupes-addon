@@ -21,7 +21,7 @@ export async function mapWithConcurrency(items, limit, mapper) {
 export function normalizeSubject(subject) {
   return String(subject || "(no subject)")
     .trim()
-    .replace(/^(re|fw|fwd):\s*/i, "") 
+    .replace(/^((re|fw|fwd):\s*)+/i, "")
     .toLowerCase();
 }
 
@@ -148,11 +148,15 @@ export async function getMessageComparisonData(message, settings) {
   }
 
   if (settings.compareMessageId) {
-    parts.push(
-      `messageId:${String(hdr.headerMessageId || hdr.messageId || "")
-        .trim()
-        .toLowerCase()}`
-    );
+    let messageId = String(hdr.headerMessageId || hdr.messageId || "")
+      .trim()
+      .toLowerCase();
+
+    if (!settings.allowMd5IdSubstitute && messageId.startsWith("md5:")) {
+      messageId = "";
+    }
+
+    parts.push(`messageId:${messageId}`);
   }
 
   if (settings.compareFolder) {
@@ -164,16 +168,16 @@ export async function getMessageComparisonData(message, settings) {
   }
 
   return {
-  id: message.id,
-  subject: String(hdr.subject || "(no subject)"),
-  author: String(hdr.author || ""),
-  folder: String(message.folder?.name || message.folder?.path || ""),
-  date: hdr.date ? new Date(hdr.date).toLocaleString() : "",
-  dateValue: hdr.date ? new Date(hdr.date).getTime() : 0,
-  messageId: String(hdr.headerMessageId || hdr.messageId || ""),
-  size: hdr.size || message.size || "",
-  flags: Array.isArray(message.flags) ? message.flags : [],
-  key: parts.join("|"),
+    id: message.id,
+    subject: String(hdr.subject || "(no subject)"),
+    author: String(hdr.author || ""),
+    folder: String(message.folder?.name || message.folder?.path || ""),
+    date: hdr.date ? new Date(hdr.date).toLocaleString() : "",
+    dateValue: hdr.date ? new Date(hdr.date).getTime() : 0,
+    messageId: String(hdr.headerMessageId || hdr.messageId || ""),
+    size: hdr.size || message.size || "",
+    flags: Array.isArray(message.flags) ? message.flags : [],
+    key: parts.join("|"),
   };
 }
 

@@ -9,6 +9,7 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 
 let data = null;
+let scanFolders = [];
 
 // default sort: highest count first
 let sort = { key: "count", dir: "desc" };
@@ -170,7 +171,7 @@ function compareRows(a, b, key, dir) {
 
   if (key === "count") {
     cmp = (Number(a.count) || 0) - (Number(b.count) || 0);
-  
+
   } else if (key === "subject") {
     cmp = String(a.subject || "").localeCompare(String(b.subject || ""), undefined, {
       sensitivity: "base",
@@ -180,13 +181,13 @@ function compareRows(a, b, key, dir) {
     cmp = String(a.author || "").localeCompare(String(b.author || ""), undefined, {
       sensitivity: "base",
     });
-  
+
   } else if (key === "folder") {
     cmp = String(a.folder || "").localeCompare(String(b.folder || ""), undefined, {
       sensitivity: "base",
-  
+
     });
-  
+
   } else if (key === "date") {
     cmp = (Number(a.dateValue) || 0) - (Number(b.dateValue) || 0);
   }
@@ -266,11 +267,11 @@ async function render() {
     ["th-folder", "sort-folder", settings.compareFolder],
     ["th-date", "sort-date", settings.compareSendTime],
   ].forEach(([thId, btnId, active]) => {
-      const th = document.getElementById(thId);
-      const btn = document.getElementById(btnId);
+    const th = document.getElementById(thId);
+    const btn = document.getElementById(btnId);
 
-      if (th) th.classList.toggle("active-criterion", active);
-      if (btn) btn.classList.toggle("active-criterion", active);
+    if (th) th.classList.toggle("active-criterion", active);
+    if (btn) btn.classList.toggle("active-criterion", active);
   });
 
   const scanSummary = document.getElementById("scan-summary");
@@ -288,92 +289,98 @@ async function render() {
         : browser.i18n.getMessage("searchScopeAll");
 
     let summaryText =
-    `${browser.i18n.getMessage("scanSummaryLabel")} ${enabled.join(", ")} • ${scope}`;
+      `${browser.i18n.getMessage("scanSummaryLabel")} ${enabled.join(", ")} • ${scope}`;
 
     if (Array.isArray(data.originalsFolderNames) && data.originalsFolderNames.length > 0) {
       summaryText += ` • ${browser.i18n.getMessage(
-      "originalsFoldersUsed",
-      data.originalsFolderNames.join(", ")
-    )}`;
-  }
+        "originalsFoldersUsed",
+        data.originalsFolderNames.join(", ")
+      )}`;
+    }
 
-scanSummary.textContent = summaryText;
+    scanSummary.textContent = summaryText;
   }
 
   if (data.noCriteriaSelected) {
-  const deleteSelectedBtn = document.getElementById("delete-selected");
+    const deleteSelectedBtn = document.getElementById("delete-selected");
 
-  if (deleteSelectedBtn) {
-    deleteSelectedBtn.disabled = true;
+    if (deleteSelectedBtn) {
+      deleteSelectedBtn.disabled = true;
+    }
+
+    tbody.textContent = "";
+
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+
+    cell.colSpan = 5;
+    cell.style.textAlign = "center";
+    cell.style.padding = "16px";
+    cell.textContent = browser.i18n.getMessage("noCriteriaSelected");
+
+    row.appendChild(cell);
+    tbody.appendChild(row);
+
+    return;
   }
-
-  tbody.textContent = "";
-
-  const row = document.createElement("tr");
-  const cell = document.createElement("td");
-
-  cell.colSpan = 5;
-  cell.style.textAlign = "center";
-  cell.style.padding = "16px";
-  cell.textContent = browser.i18n.getMessage("noCriteriaSelected");
-
-  row.appendChild(cell);
-  tbody.appendChild(row);
-
-  return;
-}
 
   if (rows.length === 0) {
-  const deleteSelectedBtn = document.getElementById("delete-selected");
+    const deleteSelectedBtn = document.getElementById("delete-selected");
 
-  if (deleteSelectedBtn) {
-    deleteSelectedBtn.disabled = true;
+    if (deleteSelectedBtn) {
+      deleteSelectedBtn.disabled = true;
+    }
+
+    tbody.textContent = "";
+
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+
+    cell.colSpan = 5;
+    cell.style.textAlign = "center";
+    cell.style.padding = "16px";
+    cell.textContent = browser.i18n.getMessage("noResults");
+
+    row.appendChild(cell);
+    tbody.appendChild(row);
+
+    return;
   }
-
-  tbody.textContent = "";
-
-  const row = document.createElement("tr");
-  const cell = document.createElement("td");
-
-  cell.colSpan = 5;
-  cell.style.textAlign = "center";
-  cell.style.padding = "16px";
-  cell.textContent = browser.i18n.getMessage("noResults");
-
-  row.appendChild(cell);
-  tbody.appendChild(row);
-
-  return;
-}
 
   renderToken++;
   const token = renderToken;
   renderRowsChunked(tbody, rows, 1, token);
 }
 
-async function waitForResults() {
-  while (true) {
-    const status = await browser.runtime.sendMessage({ type: "get-scan-status" });
+function buildRowsFromGroups(groupedValues, hasOriginals) {
+  return groupedValues
+    .filter((group) => {
+      if (hasOriginals) {
+        return group.originalCount > 0 && group.count > group.originalCount;
+      }
 
-    if (status.error) {
-      throw new Error(status.error);
-    }
+      return group.count > 1;
+    })
+    .map((group) => {
+      const messages = group.messages.map((message, index) => ({
+        ...message,
+        action: hasOriginals
+          ? (message.isOriginal ? "keep" : "delete")
+          : (index === 0 ? "keep" : "delete"),
+      }));
 
-    if (status.inProgress) {
-      const folderText = status.folderName
-        ? browser.i18n.getMessage("loadingFolderText", status.folderName)
-        : browser.i18n.getMessage("loadingText");
-
-      setLoading(true, folderText);
-    }
-
-    if (!status.inProgress && status.hasResults) {
-      data = await browser.runtime.sendMessage({ type: "get-last-scan-results" });
-      return;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 300));
-  }
+      return {
+        subject: group.subject,
+        author: group.author,
+        folder: group.folder,
+        date: group.date,
+        dateValue: group.dateValue,
+        count: group.count,
+        messageIds: group.messageIds,
+        messages,
+      };
+    })
+    .sort((a, b) => b.count - a.count);
 }
 
 async function runDuplicateScan(selectedFolders) {
@@ -388,7 +395,7 @@ async function runDuplicateScan(selectedFolders) {
 
   // Track folders marked as "originals" for one-shot duplicate comparison
   const originalFolderKeys = new Set(
-  originalsForThisScan.map((folder) => folder.path || folder.name)
+    originalsForThisScan.map((folder) => folder.path || folder.name)
   );
 
   let foldersToScan = [];
@@ -406,13 +413,13 @@ async function runDuplicateScan(selectedFolders) {
 
   // Skip special folders such as 'trash' unless they are explicitly marked as originals
   foldersToScan = foldersToScan.filter((folder) => {
-  const key = folder.path || folder.name;
+    const key = folder.path || folder.name;
 
-  if (originalFolderKeys.has(key)) {
-    return true;
-  }
+    if (originalFolderKeys.has(key)) {
+      return true;
+    }
 
-  return !folders.shouldSkipFolder(folder, settings);
+    return !folders.shouldSkipFolder(folder, settings);
   });
 
   if (foldersToScan.length === 0) {
@@ -466,7 +473,7 @@ async function runDuplicateScan(selectedFolders) {
       console.log("Total messaages so far", allMessages.length);
     }
 
-    
+
 
     if (!hasAnyCriteria) {
       data = {
@@ -484,26 +491,19 @@ async function runDuplicateScan(selectedFolders) {
     }
 
     // Process messages with limited concurrency to avoid blocking the UI
-    const comparisons = await comparison.mapWithConcurrency(
-      allMessages,
-      comparison.ENTRY_CONCURRENCY,
-      async (message) => {
-        try {
-          const item = await comparison.getMessageComparisonData(message, settings);
-          item.isOriginal = originalFolderKeys.has(message.folder?.path || message.folder?.name);
-          return item;
-        } catch (e) {
-          console.warn("Failed to process message", message.id, e);
-          return null;
-        }
-      }
-    );
-
-// Group messages by comparison key, the first run using selected fields
-
     const groups = new Map();
 
-    for (const item of comparisons) {
+    for (const message of allMessages) {
+      let item = null;
+
+      try {
+        item = await comparison.getMessageComparisonData(message, settings);
+        item.isOriginal = originalFolderKeys.has(message.folder?.path || message.folder?.name);
+      } catch (e) {
+        console.warn("Failed to process message", message.id, e);
+        continue;
+      }
+
       if (!item || !item.key) {
         continue;
       }
@@ -537,13 +537,33 @@ async function runDuplicateScan(selectedFolders) {
         flags: item.flags,
         isOriginal: item.isOriginal === true,
       });
-      
+
       if (item.isOriginal) {
         group.originalCount += 1;
       }
+
+      if (groups.size > 0 && group.count > 1 && allMessages.indexOf(message) % 25 === 0) {
+        const groupedValues = [...groups.values()];
+        const hasOriginals = originalsForThisScan.length > 0;
+        const rows = buildRowsFromGroups(groupedValues, hasOriginals);
+
+        data = {
+          folderName:
+            foldersToScan.length === 1
+              ? foldersToScan[0].name
+              : `${foldersToScan.length} folders`,
+          scannedCount: allMessages.length,
+          duplicateGroupCount: rows.length,
+          rows,
+          partial: true,
+          originalsFolderNames: originalsForThisScan.map((f) => f.name),
+        };
+
+        await render();
+      }
     }
 
-  // Convert grouped map to array and optionally refine using body comparison
+    // Convert grouped map to array and optionally refine using body comparison
     let groupedValues = [...groups.values()];
 
     if (settings.compareBody) {
@@ -552,37 +572,8 @@ async function runDuplicateScan(selectedFolders) {
 
     const hasOriginals = originalsForThisScan.length > 0;
 
-// Build final rows for dialog display and apply keep/delete 
-    const rows = groupedValues
-    .filter((group) => {
-      if (hasOriginals) {
-        return group.originalCount > 0 && group.count > group.originalCount;
-      }
-
-    return group.count > 1;
-    })
-
-    .map((group) => {
-      const messages = group.messages.map((message, index) => ({
-        ...message,
-        action: hasOriginals
-        ? (message.isOriginal ? "keep" : "delete")
-        : (index === 0 ? "keep" : "delete"),
-      }));
-
-      return {
-        subject: group.subject,
-        author: group.author,
-        folder: group.folder,
-        date: group.date,
-        dateValue: group.dateValue,
-        count: group.count,
-        messageIds: group.messageIds,
-        messages,
-      };
-    })
-
-    .sort((a, b) => b.count - a.count);
+    // Build final rows for dialog display and apply keep/delete 
+    const rows = buildRowsFromGroups(groupedValues, hasOriginals);
 
     console.log("Duplicate rows", rows.length);
 
@@ -599,8 +590,8 @@ async function runDuplicateScan(selectedFolders) {
     };
   } catch (err) {
     console.error("Scan failed:", err);
-    lastScanError = String(err);
-  } 
+    throw err;
+  }
 }
 
 async function init() {
@@ -662,8 +653,8 @@ async function init() {
         }
       }
 
-        await render();
-        updateDeleteSelectedButton();
+      await render();
+      updateDeleteSelectedButton();
     });
   }
 
@@ -698,7 +689,7 @@ async function init() {
 
       for (const row of data?.rows || []) {
         const message = (row.messages || []).find(
-        (m) => String(m.id) === String(messageId)
+          (m) => String(m.id) === String(messageId)
         );
 
         if (message) {
@@ -711,7 +702,7 @@ async function init() {
     });
   }
 
-  await render(); 
+  await render();
 
   const closeBtn = document.getElementById("close");
   if (closeBtn) {
@@ -723,9 +714,9 @@ async function init() {
   const deleteSelectedBtn = document.getElementById("delete-selected");
 
   if (deleteSelectedBtn) {
-  deleteSelectedBtn.disabled = true;
+    deleteSelectedBtn.disabled = true;
 
-  deleteSelectedBtn.addEventListener("click", async () => {
+    deleteSelectedBtn.addEventListener("click", async () => {
       const messageIdsToDelete = [];
 
       for (const row of data?.rows || []) {
@@ -757,7 +748,7 @@ async function init() {
 
       for (const row of data?.rows || []) {
         row.messages = (row.messages || []).filter(
-        (message) => !messageIdsToDelete.includes(message.id)
+          (message) => !messageIdsToDelete.includes(message.id)
         );
       }
 
@@ -768,16 +759,50 @@ async function init() {
     });
   }
 
-  const { scanMailTabId} = await browser.storage.local.get({
+  const { scanMailTabId } = await browser.storage.local.get({
     scanMailTabId: null,
   });
 
-  const selectedFolders = await browser.mailTabs.getSelectedFolders(scanMailTabId);
+  scanFolders = await browser.mailTabs.getSelectedFolders(scanMailTabId);
 
   await browser.storage.local.remove("scanMailTabId");
 
-  await runDuplicateScan(selectedFolders);
+  await runDuplicateScan(scanFolders);
+
+  const settings = await preferences.getSettings();
+
+  if (!settings.reviewBeforeDeletion && data?.rows?.length > 0) {
+    const messageIdsToDelete = [];
+
+    for (const row of data.rows || []) {
+      for (const message of row.messages || []) {
+        if (message.action === "delete") {
+          messageIdsToDelete.push(message.id);
+        }
+      }
+    }
+
+    if (messageIdsToDelete.length > 0) {
+      const confirmed = confirm(
+        browser.i18n.getMessage("deleteSelectedConfirm", [
+          String(messageIdsToDelete.length),
+        ])
+      );
+
+      if (confirmed) {
+        await browser.runtime.sendMessage({
+          type: "delete-selected-messages",
+          messageIds: messageIdsToDelete,
+        });
+
+        window.close();
+        return;
+      }
+    }
+  }
+
   await render();
+  updateDeleteSelectedButton();
 
   if (originalsWereUsed()) {
     for (const id of ["keep-first", "keep-last", "delete-duplicates", "reset-choices"]) {
