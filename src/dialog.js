@@ -301,6 +301,29 @@ async function render() {
     scanSummary.textContent = summaryText;
   }
 
+  if (data.noFolderSelected) {
+    const deleteSelectedBtn = document.getElementById("delete-selected");
+
+    if (deleteSelectedBtn) {
+      deleteSelectedBtn.disabled = true;
+    }
+
+    tbody.textContent = "";
+
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+
+    cell.colSpan = 5;
+    cell.style.textAlign = "center";
+    cell.style.padding = "16px";
+    cell.textContent = browser.i18n.getMessage("noFolderSelected");
+
+    row.appendChild(cell);
+    tbody.appendChild(row);
+
+    return;
+  }
+
   if (data.noCriteriaSelected) {
     const deleteSelectedBtn = document.getElementById("delete-selected");
 
@@ -741,9 +764,12 @@ async function init() {
         return;
       }
 
+      const settings = await preferences.getSettings();
+
       await browser.runtime.sendMessage({
         type: "delete-selected-messages",
         messageIds: messageIdsToDelete,
+        deletePermanently: settings.defaultAction === "permanent",
       });
 
       for (const row of data?.rows || []) {
@@ -766,6 +792,20 @@ async function init() {
   scanFolders = await browser.mailTabs.getSelectedFolders(scanMailTabId);
 
   await browser.storage.local.remove("scanMailTabId");
+
+  if (!Array.isArray(scanFolders) || scanFolders.length === 0) {
+    data = {
+      folderName: "",
+      scannedCount: 0,
+      duplicateGroupCount: 0,
+      rows: [],
+      noFolderSelected: true,
+    };
+
+    await render();
+    updateDeleteSelectedButton();
+    return;
+  }
 
   await runDuplicateScan(scanFolders);
 
@@ -793,6 +833,7 @@ async function init() {
         await browser.runtime.sendMessage({
           type: "delete-selected-messages",
           messageIds: messageIdsToDelete,
+          deletePermanently: settings.defaultAction === "permanent",
         });
 
         window.close();

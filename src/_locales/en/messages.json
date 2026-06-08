@@ -188,6 +188,10 @@
       "message": "No comparison criteria selected. Enable at least one comparison option and run the scan again."
     },
 
+    "noFolderSelected": {
+      "message": "No folder selected. Select a folder and run the scan again"
+    },
+
     "runDuplicateScanCommand": {
       "message": "Run duplicate scan"
     },
