@@ -114,7 +114,7 @@ export async function getBodyComparisonKey(messageId) {
 }
 
 export async function getMessageComparisonData(message, settings) {
-  const hdr = await browser.messages.get(message.id);
+  const hdr = message; //await browser.messages.get(message.id);
   const parts = [];
 
   const missingValue = settings.assumeEachMissingValueIsUnique
