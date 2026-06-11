@@ -20,6 +20,7 @@ function setLoading(isLoading, text = browser.i18n.getMessage("loadingText")) {
   const loading = document.getElementById("loading");
   const loadingText = document.getElementById("loading-text");
   const resultsWrap = document.getElementById("results-wrap");
+  const reviewToolbar = document.getElementById("review-toolbar");
 
   if (loadingText) {
     loadingText.textContent = isLoading ? text : "";
@@ -31,6 +32,10 @@ function setLoading(isLoading, text = browser.i18n.getMessage("loadingText")) {
 
   if (resultsWrap) {
     resultsWrap.hidden = isLoading;
+  }
+
+  if (reviewToolbar) {
+    reviewToolbar.hidden = isLoading;
   }
 }
 
@@ -471,6 +476,9 @@ async function runDuplicateScan(selectedFolders) {
 
     for (const folder of foldersToScan) {
       const messages = await folders.getAllMessages(folder);
+      for (const message of messages) {
+        message.folder = folder;
+      }
 
       let filtered = messages;
 
@@ -516,7 +524,9 @@ async function runDuplicateScan(selectedFolders) {
     // Process messages with limited concurrency to avoid blocking the UI
     const groups = new Map();
 
+    let messageIndex = -1;
     for (const message of allMessages) {
+      messageIndex += 1;
       let item = null;
 
       try {
@@ -565,7 +575,7 @@ async function runDuplicateScan(selectedFolders) {
         group.originalCount += 1;
       }
 
-      if (groups.size > 0 && group.count > 1 && allMessages.indexOf(message) % 25 === 0) {
+      if (groups.size > 0 && group.count > 1 && messageIndex % 25 === 0) {
         const groupedValues = [...groups.values()];
         const hasOriginals = originalsForThisScan.length > 0;
         const rows = buildRowsFromGroups(groupedValues, hasOriginals);

@@ -13,6 +13,11 @@
   <script type="module" src="./vendor/webawesome/components/button/button.js"></script>
 
   <style>
+    html,
+    body {
+      height: 100%;
+    }
+
     body {
       margin: 0;
       font: message-box;
@@ -21,7 +26,11 @@
     }
 
     .page {
+      box-sizing: border-box;
+      height: 100%;
       padding: 16px;
+      display: flex;
+      flex-direction: column;
     }
 
     .header {
@@ -80,7 +89,8 @@
     }
 
     .table-wrap {
-      max-height: 60vh;
+      flex: 1 1 auto;
+      min-height: 0;
       overflow: auto;
     }
 
@@ -89,6 +99,7 @@
     }
 
     .loading {
+      flex: 1 1 auto;
       display: flex;
       align-items: center;
       gap: 10px;
@@ -113,29 +124,34 @@
       display: none !important;
     }
 
-    .footer {
+    .review-toolbar {
       display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-top: 12px;
-    }
-
-    .footer-left {
-      display: flex;
-      flex-wrap: nowrap;
-      gap: 14px;
+      flex-wrap: wrap;
+      gap: 8px;
       align-items: center;
+      padding: 0 0 8px 0;
+      margin: 0 0 8px 0;
+      border-bottom: 1px solid rgba(0, 0, 0, .12);
     }
 
-    .footer-left wa-button::part(base) {
+    .review-toolbar[hidden] {
+      display: none !important;
+    }
+
+    .review-toolbar wa-button::part(base) {
       font-size: 0.82rem;
-      padding: 2px 4px;
+      padding: 2px 8px;
     }
 
-    .footer-actions {
+    .footer {
+      flex: 0 0 auto;
       display: flex;
       justify-content: flex-end;
       gap: 12px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(0, 0, 0, .12);
+      background: #ffffff;
     }
 
     wa-button[variant="primary"]::part(base) {
@@ -243,6 +259,25 @@
       <div id="loading-text" data-i18n-content="loadingText">Scanning folder…</div>
     </div>
 
+    <div class="review-toolbar" id="review-toolbar" hidden>
+      <wa-button variant="text" size="small" id="keep-first" type="button" data-i18n-content="keepFirstInEachGroup">
+        Keep first in each group
+      </wa-button>
+
+      <wa-button variant="text" size="small" id="keep-last" type="button" data-i18n-content="keepLastInEachGroup">
+        Keep last in each group
+      </wa-button>
+
+      <wa-button variant="text" size="small" id="delete-duplicates" type="button"
+        data-i18n-content="deleteAllDuplicates">
+        Mark duplicates for deletion
+      </wa-button>
+
+      <wa-button variant="text" size="small" id="reset-choices" type="button" data-i18n-content="resetReviewChoices">
+        Reset choices
+      </wa-button>
+    </div>
+
     <div class="table-wrap" id="results-wrap" hidden>
       <table>
         <thead>
@@ -283,37 +318,17 @@
     </div>
 
     <div class="footer">
-      <div class="footer-left">
-        <wa-button variant="text" size="small" id="keep-first" type="button" data-i18n-content="keepFirstInEachGroup">
-          Keep first in each group
-        </wa-button>
+      <wa-button variant="primary" id="delete-selected" type="button" data-i18n-content="deleteSelected">
+        Delete selected
+      </wa-button>
 
-        <wa-button variant="text" size="small" id="keep-last" type="button" data-i18n-content="keepLastInEachGroup">
-          Keep last in each group
-        </wa-button>
-
-        <wa-button variant="text" size="small" id="delete-duplicates" type="button"
-          data-i18n-content="deleteAllDuplicates">
-          Mark duplicates for deletion
-        </wa-button>
-
-        <wa-button variant="text" size="small" id="reset-choices" type="button" data-i18n-content="resetReviewChoices">
-          Reset choices
-        </wa-button>
-      </div>
-
-      <div class="footer-actions">
-        <wa-button variant="primary" id="delete-selected" type="button" data-i18n-content="deleteSelected">
-          Delete selected
-        </wa-button>
-
-        <wa-button variant="primary" id="close" data-i18n-content="close">
-          Close
-        </wa-button>
-      </div>
+      <wa-button variant="primary" id="close" data-i18n-content="close">
+        Close
+      </wa-button>
     </div>
+  </div>
 
-    <script type="module" src="dialog.js"></script>
+  <script type="module" src="dialog.js"></script>
 </body>
 
 </html>
