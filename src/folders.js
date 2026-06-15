@@ -25,6 +25,35 @@ export async function collectFolders(rootFolder, includeSubfolders) {
   return folders;
 }
 
+export async function listAllFolders() {
+  const accounts = await browser.accounts.list();
+  const entries = [];
+
+  function walk(accountId, accountName, folderList, depth) {
+    for (const folder of folderList || []) {
+      if (folder.path && folder.path !== "/") {
+        entries.push({
+          accountId,
+          path: folder.path,
+          name: folder.name,
+          label: `${accountName}: ${"  ".repeat(depth)}${folder.name}`,
+          depth,
+        });
+      }
+
+      if (Array.isArray(folder.subFolders) && folder.subFolders.length > 0) {
+        walk(accountId, accountName, folder.subFolders, depth + 1);
+      }
+    }
+  }
+
+  for (const account of accounts) {
+    walk(account.id, account.name, account.folders || account.rootFolder?.subFolders, 0);
+  }
+
+  return entries;
+}
+
 export function getSelectedFolders(info) {
   if (Array.isArray(info.selectedFolders) && info.selectedFolders.length > 0) {
     return info.selectedFolders;

@@ -100,6 +100,18 @@
     </div>
 
     <div class="row">
+      <label>
+        <input type="checkbox" id="silentMode" />
+        <span data-i18n-content="silentMode">
+        Silent mode (scan and act automatically, no dialog)
+        </span>
+      </label>
+      <div class="note indent" data-i18n-content="silentModeNote">
+        When enabled, scanning runs in the background, applies the default action below, and shows a notification. The review setting is ignored.
+      </div>
+    </div>
+
+    <div class="row">
       <div><strong data-i18n-content="defaultActionLabel">Default action for duplicate messages:</strong></div>
     </div>
 
@@ -119,6 +131,24 @@
         Delete permanently
         </span>
       </label>
+    </div>
+
+    <div class="row indent">
+      <label>
+        <input type="radio" name="defaultAction" value="move" />
+        <span data-i18n-content="moveToFolder">
+        Move to folder
+        </span>
+      </label>
+    </div>
+
+    <div class="row indent">
+      <label for="moveTargetFolder" data-i18n-content="moveTargetFolderLabel">
+        Destination folder:
+      </label>
+      <select id="moveTargetFolder">
+        <option value="" data-i18n-content="moveTargetFolderNone">(none selected)</option>
+      </select>
     </div>
   </fieldset>
 

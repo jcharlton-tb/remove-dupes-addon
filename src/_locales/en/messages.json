@@ -258,5 +258,56 @@
   },
   "bulkActionsUnavailableWithOriginals": {
     "message": "Bulk actions are disabled when originals folders are used."
+  },
+  "previewMessage": {
+    "message": "Open"
+  },
+  "moveSelected": {
+    "message": "Move selected"
+  },
+  "moveSelectedConfirm": {
+    "message": "Move $COUNT$ selected duplicate messages to the chosen folder?",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "silentMode": {
+    "message": "Silent mode (scan and act automatically, no dialog)"
+  },
+  "silentModeNote": {
+    "message": "When enabled, scanning runs in the background, applies the default action below, and shows a notification. The review setting is ignored."
+  },
+  "moveToFolder": {
+    "message": "Move to folder"
+  },
+  "moveTargetFolderLabel": {
+    "message": "Destination folder:"
+  },
+  "moveTargetFolderNone": {
+    "message": "(none selected)"
+  },
+  "silentScanTitle": {
+    "message": "Duplicate scan"
+  },
+  "silentNoDuplicates": {
+    "message": "No duplicate messages were found."
+  },
+  "silentMovedCount": {
+    "message": "Moved $COUNT$ duplicate messages to the chosen folder.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "silentDeletedCount": {
+    "message": "Removed $COUNT$ duplicate messages.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
   }
 }

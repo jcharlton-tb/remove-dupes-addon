@@ -3,8 +3,10 @@ export const DEFAULT_SETTINGS = {
     skipImapDeleted: true,
     searchSubfolders: true,
     reviewBeforeDeletion: true,
-    defaultAction: "trash", 
-  
+    defaultAction: "trash",
+    moveTargetFolder: null,
+    silentMode: false,
+
     compareSubject: true,
     compareAuthor: true,
     compareRecipients: true,
