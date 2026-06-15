@@ -17,6 +17,7 @@
     "accountsRead",
     "messagesMove",
     "messagesDelete",
+    "notifications",
     "storage"
   ],
   "background": {

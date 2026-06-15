@@ -3,6 +3,7 @@ import * as originals from "./originals.js";
 import * as folders from "./folders.js";
 import * as comparison from "./comparison.js";
 import * as menus from "./menus.js";
+import * as scan from "./scan.js";
 
 // background.js
 console.log("RemoveDupes background loaded");
@@ -78,6 +79,107 @@ let lastScanError = null;
 let currentScanFolderName = null;
 
 
+async function applyDuplicateAction(messageIds) {
+  const ids = Array.isArray(messageIds) ? messageIds : [];
+
+  if (ids.length === 0) {
+    return { count: 0 };
+  }
+
+  const settings = await preferences.getSettings();
+
+  if (settings.defaultAction === "move") {
+    if (!settings.moveTargetFolder) {
+      throw new Error("Move target folder is not configured");
+    }
+
+    await browser.messages.move(ids, settings.moveTargetFolder);
+  } else {
+    await browser.messages.delete(ids, {
+      deletePermanently: settings.defaultAction === "permanent",
+    });
+  }
+
+  return { count: ids.length };
+}
+
+async function notifyUser(message) {
+  try {
+    await browser.notifications.create({
+      type: "basic",
+      title: browser.i18n.getMessage("silentScanTitle"),
+      message,
+    });
+  } catch (error) {
+    console.warn("Notification failed:", error, message);
+  }
+}
+
+// Single entry point for every scan trigger. Silent mode scans, applies the
+// configured action, and reports via a notification; otherwise the review
+// dialog window opens as before.
+async function launchDuplicateScan(mailTabId) {
+  const settings = await preferences.getSettings();
+
+  if (!settings.silentMode) {
+    await browser.storage.local.set({ scanMailTabId: mailTabId });
+
+    await browser.windows.create({
+      url: browser.runtime.getURL("dialog.html"),
+      type: "popup",
+      width: 900,
+      height: 650,
+    });
+
+    return;
+  }
+
+  let selectedFolders = [];
+  try {
+    selectedFolders = await browser.mailTabs.getSelectedFolders(mailTabId);
+  } catch (error) {
+    console.warn("Failed to read selected folders:", error);
+  }
+
+  if (!Array.isArray(selectedFolders) || selectedFolders.length === 0) {
+    await notifyUser(browser.i18n.getMessage("noFolderSelected"));
+    return;
+  }
+
+  try {
+    const originalsForThisScan = await originals.getOriginalsFolders();
+    await originals.clearOriginalsFolders();
+
+    const result = await scan.scanForDuplicates(selectedFolders, settings, {
+      originalsForThisScan,
+    });
+
+    const ids = [];
+    for (const row of result.rows || []) {
+      for (const message of row.messages || []) {
+        if (message.action === "delete") {
+          ids.push(message.id);
+        }
+      }
+    }
+
+    if (ids.length === 0) {
+      await notifyUser(browser.i18n.getMessage("silentNoDuplicates"));
+      return;
+    }
+
+    await applyDuplicateAction(ids);
+
+    const messageKey =
+      settings.defaultAction === "move" ? "silentMovedCount" : "silentDeletedCount";
+    await notifyUser(browser.i18n.getMessage(messageKey, [String(ids.length)]));
+  } catch (error) {
+    console.error("Silent scan failed:", error);
+    await notifyUser(`${browser.i18n.getMessage("errorPrefix")} ${error?.message || error}`);
+  }
+}
+
+
 browser.runtime.onMessage.addListener((msg) => {
   if (msg && msg.type === "get-last-scan-results") {
     return Promise.resolve(lastScanResults);
@@ -96,15 +198,14 @@ browser.runtime.onMessage.addListener((msg) => {
     return preferences.getSettings();
   }
 
-  if (msg && msg.type === "delete-selected-messages") {
-    const ids = Array.isArray(msg.messageIds) ? msg.messageIds : [];
+  if (msg && msg.type === "commit-duplicate-actions") {
+    return applyDuplicateAction(msg.messageIds);
+  }
 
-    if (ids.length === 0) {
-      return Promise.resolve();
-    }
-
-    return browser.messages.delete(ids, {
-      deletePermanently: msg.deletePermanently === true,
+  if (msg && msg.type === "preview-message") {
+    return browser.messageDisplay.open({
+      messageId: msg.messageId,
+      location: "tab",
     });
   }
 
@@ -160,16 +261,7 @@ browser.menus.onClicked.addListener(async (info) => {
         currentWindow: true,
       });
 
-      await browser.storage.local.set({
-        scanMailTabId: activeTab.id,
-      });
-
-      await browser.windows.create({
-        url: browser.runtime.getURL("dialog.html"),
-        type: "popup",
-        width: 900,
-        height: 650,
-      })
+      await launchDuplicateScan(activeTab.id);
     } catch (err) {
       console.error("Tools menu scan failed:", err);
     }
@@ -201,17 +293,7 @@ browser.menus.onClicked.addListener(async (info) => {
     currentWindow: true,
   });
 
-  await browser.storage.local.set({
-    scanMailTabId: activeTab.id,
-  });
-
-  await browser.windows.create({
-    url: browser.runtime.getURL("dialog.html"),
-    type: "popup",
-    width: 900,
-    height: 650,
-  })
-
+  await launchDuplicateScan(activeTab.id);
 });
 
 if (browser.commands && browser.commands.onCommand) {
@@ -219,22 +301,12 @@ if (browser.commands && browser.commands.onCommand) {
     if (command !== "run-duplicate-scan") return;
 
     try {
-
       const [activeTab] = await browser.tabs.query({
         active: true,
         currentWindow: true,
       });
 
-      await browser.storage.local.set({
-        scanMailTabId: activeTab.id,
-      });
-
-      await browser.windows.create({
-        url: browser.runtime.getURL("dialog.html"),
-        type: "popup",
-        width: 900,
-        height: 650,
-      })
+      await launchDuplicateScan(activeTab.id);
     } catch (err) {
       console.error("Command failed:", err);
     }
@@ -245,22 +317,12 @@ if (browser.commands && browser.commands.onCommand) {
 
 browser.browserAction.onClicked.addListener(async () => {
   try {
-
     const [activeTab] = await browser.tabs.query({
       active: true,
       currentWindow: true,
     });
 
-    await browser.storage.local.set({
-      scanMailTabId: activeTab.id,
-    });
-
-    await browser.windows.create({
-      url: browser.runtime.getURL("dialog.html"),
-      type: "popup",
-      width: 900,
-      height: 650,
-    })
+    await launchDuplicateScan(activeTab.id);
   } catch (err) {
     console.error("Toolbar click scan failed:", err);
   }

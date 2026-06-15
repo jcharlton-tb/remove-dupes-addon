@@ -1,8 +1,7 @@
 import { localizeDocument } from "./vendor/i18n.mjs";
 import * as preferences from "./settings.js";
 import * as originals from "./originals.js";
-import * as folders from "./folders.js";
-import * as comparison from "./comparison.js";
+import * as scan from "./scan.js";
 
 window.addEventListener("DOMContentLoaded", () => {
   localizeDocument();
@@ -131,6 +130,13 @@ function renderRowsChunked(tbody, rows, chunkSize = 1, token) {
 
         actions.appendChild(keepLabel);
         actions.appendChild(deleteLabel);
+
+        const previewBtn = document.createElement("button");
+        previewBtn.type = "button";
+        previewBtn.className = "preview-btn";
+        previewBtn.dataset.messageId = String(message.id);
+        previewBtn.textContent = browser.i18n.getMessage("previewMessage") || "Open";
+        actions.appendChild(previewBtn);
 
         const meta = document.createElement("div");
         meta.className = "message-meta";
@@ -380,37 +386,6 @@ async function render() {
   renderRowsChunked(tbody, rows, 1, token);
 }
 
-function buildRowsFromGroups(groupedValues, hasOriginals) {
-  return groupedValues
-    .filter((group) => {
-      if (hasOriginals) {
-        return group.originalCount > 0 && group.count > group.originalCount;
-      }
-
-      return group.count > 1;
-    })
-    .map((group) => {
-      const messages = group.messages.map((message, index) => ({
-        ...message,
-        action: hasOriginals
-          ? (message.isOriginal ? "keep" : "delete")
-          : (index === 0 ? "keep" : "delete"),
-      }));
-
-      return {
-        subject: group.subject,
-        author: group.author,
-        folder: group.folder,
-        date: group.date,
-        dateValue: group.dateValue,
-        count: group.count,
-        messageIds: group.messageIds,
-        messages,
-      };
-    })
-    .sort((a, b) => b.count - a.count);
-}
-
 async function runDuplicateScan(selectedFolders) {
   if (!Array.isArray(selectedFolders) || selectedFolders.length === 0) {
     return;
@@ -421,206 +396,18 @@ async function runDuplicateScan(selectedFolders) {
   const originalsForThisScan = await originals.getOriginalsFolders();
   await originals.clearOriginalsFolders();
 
-  // Track folders marked as "originals" for one-shot duplicate comparison
-  const originalFolderKeys = new Set(
-    originalsForThisScan.map((folder) => folder.path || folder.name)
-  );
-
-  let foldersToScan = [];
-  for (const folder of selectedFolders) {
-    const collected = await folders.collectFolders(folder, settings.searchSubfolders);
-    foldersToScan.push(...collected);
-  }
-
-  for (const folder of originalsForThisScan) {
-    const collected = await folders.collectFolders(folder, settings.searchSubfolders);
-    foldersToScan.push(...collected);
-  }
-
-  foldersToScan = folders.dedupeFolders(foldersToScan);
-
-  // Skip special folders such as 'trash' unless they are explicitly marked as originals
-  foldersToScan = foldersToScan.filter((folder) => {
-    const key = folder.path || folder.name;
-
-    if (originalFolderKeys.has(key)) {
-      return true;
-    }
-
-    return !folders.shouldSkipFolder(folder, settings);
-  });
-
-  if (foldersToScan.length === 0) {
-    return;
-  }
-
-  const hasAnyCriteria =
-    settings.compareSubject ||
-    settings.compareAuthor ||
-    settings.compareRecipients ||
-    settings.compareCc ||
-    settings.compareSendTime ||
-    settings.compareMessageId ||
-    settings.compareFolder ||
-    settings.compareBody;
-
   data = null;
 
   try {
-    console.log(
-      "Scanning folders:",
-      foldersToScan.map((folder) => folder.name)
-    );
-
-    let allMessages = [];
-
-    for (const folder of foldersToScan) {
-      const messages = await folders.getAllMessages(folder);
-      for (const message of messages) {
-        message.folder = folder;
-      }
-
-      let filtered = messages;
-
-      if (settings.skipImapDeleted) {
-        filtered = filtered.filter(
-          (message) =>
-            !(Array.isArray(message.flags) && message.flags.includes("deleted"))
-        );
-      }
-
-      switch (settings.searchScope) {
-        case "unread":
-          filtered = filtered.filter((message) => !message.read);
-          break;
-        case "all":
-        default:
-          break;
-      }
-
-      allMessages.push(...filtered);
-
-      console.log("Messages in folder", folder.name, filtered.length);
-      console.log("Total messaages so far", allMessages.length);
-    }
-
-
-
-    if (!hasAnyCriteria) {
-      data = {
-        folderName:
-          foldersToScan.length === 1
-            ? foldersToScan[0].name
-            : `${foldersToScan.length} folders`,
-        scannedCount: allMessages.length,
-        duplicateGroupCount: 0,
-        rows: [],
-        noCriteriaSelected: true,
-        originalsFolderNames: originalsForThisScan.map((f) => f.name),
-      };
-      return;
-    }
-
-    // Process messages with limited concurrency to avoid blocking the UI
-    const groups = new Map();
-
-    let messageIndex = -1;
-    for (const message of allMessages) {
-      messageIndex += 1;
-      let item = null;
-
-      try {
-        item = await comparison.getMessageComparisonData(message, settings);
-        item.isOriginal = originalFolderKeys.has(message.folder?.path || message.folder?.name);
-      } catch (e) {
-        console.warn("Failed to process message", message.id, e);
-        continue;
-      }
-
-      if (!item || !item.key) {
-        continue;
-      }
-
-      if (!groups.has(item.key)) {
-        groups.set(item.key, {
-          subject: item.subject,
-          author: item.author,
-          folder: item.folder,
-          date: item.date,
-          dateValue: item.dateValue,
-          count: 0,
-          originalCount: 0,
-          messageIds: [],
-          messages: [],
-        });
-      }
-
-      const group = groups.get(item.key);
-      group.count += 1;
-      group.messageIds.push(item.id);
-      group.messages.push({
-        id: item.id,
-        subject: item.subject,
-        author: item.author,
-        folder: item.folder,
-        date: item.date,
-        dateValue: item.dateValue,
-        messageId: item.messageId,
-        size: item.size,
-        flags: item.flags,
-        isOriginal: item.isOriginal === true,
-      });
-
-      if (item.isOriginal) {
-        group.originalCount += 1;
-      }
-
-      if (groups.size > 0 && group.count > 1 && messageIndex % 25 === 0) {
-        const groupedValues = [...groups.values()];
-        const hasOriginals = originalsForThisScan.length > 0;
-        const rows = buildRowsFromGroups(groupedValues, hasOriginals);
-
-        data = {
-          folderName:
-            foldersToScan.length === 1
-              ? foldersToScan[0].name
-              : `${foldersToScan.length} folders`,
-          scannedCount: allMessages.length,
-          duplicateGroupCount: rows.length,
-          rows,
-          partial: true,
-          originalsFolderNames: originalsForThisScan.map((f) => f.name),
-        };
-
+    const result = await scan.scanForDuplicates(selectedFolders, settings, {
+      originalsForThisScan,
+      onProgress: async (partial) => {
+        data = partial;
         await render();
-      }
-    }
+      },
+    });
 
-    // Convert grouped map to array and optionally refine using body comparison
-    let groupedValues = [...groups.values()];
-
-    if (settings.compareBody) {
-      groupedValues = await comparison.filterGroupsByBody(groupedValues);
-    }
-
-    const hasOriginals = originalsForThisScan.length > 0;
-
-    // Build final rows for dialog display and apply keep/delete 
-    const rows = buildRowsFromGroups(groupedValues, hasOriginals);
-
-    console.log("Duplicate rows", rows.length);
-
-    data = {
-      folderName:
-        foldersToScan.length === 1
-          ? foldersToScan[0].name
-          : `${foldersToScan.length} folders`,
-      scannedCount: allMessages.length,
-      duplicateGroupCount: rows.length,
-      rows,
-      noDuplicatesFound: rows.length === 0,
-      originalsFolderNames: originalsForThisScan.map((f) => f.name),
-    };
+    data = result;
   } catch (err) {
     console.error("Scan failed:", err);
     throw err;
@@ -733,6 +520,19 @@ async function init() {
 
       updateDeleteSelectedButton();
     });
+
+    tbody.addEventListener("click", async (event) => {
+      const button = event.target.closest(".preview-btn");
+      if (!button) return;
+
+      const messageId = Number(button.dataset.messageId);
+      if (!Number.isFinite(messageId)) return;
+
+      await browser.runtime.sendMessage({
+        type: "preview-message",
+        messageId,
+      });
+    });
   }
 
   await render();
@@ -764,22 +564,23 @@ async function init() {
         return;
       }
 
+      const settings = await preferences.getSettings();
+      const isMove = settings.defaultAction === "move";
+
       const confirmed = confirm(
-        browser.i18n.getMessage("deleteSelectedConfirm", [
-          String(messageIdsToDelete.length),
-        ])
+        browser.i18n.getMessage(
+          isMove ? "moveSelectedConfirm" : "deleteSelectedConfirm",
+          [String(messageIdsToDelete.length)]
+        )
       );
 
       if (!confirmed) {
         return;
       }
 
-      const settings = await preferences.getSettings();
-
       await browser.runtime.sendMessage({
-        type: "delete-selected-messages",
+        type: "commit-duplicate-actions",
         messageIds: messageIdsToDelete,
-        deletePermanently: settings.defaultAction === "permanent",
       });
 
       for (const row of data?.rows || []) {
@@ -821,6 +622,13 @@ async function init() {
 
   const settings = await preferences.getSettings();
 
+  if (settings.defaultAction === "move") {
+    const deleteSelectedBtn = document.getElementById("delete-selected");
+    if (deleteSelectedBtn) {
+      deleteSelectedBtn.textContent = browser.i18n.getMessage("moveSelected") || "Move selected";
+    }
+  }
+
   if (!settings.reviewBeforeDeletion && data?.rows?.length > 0) {
     const messageIdsToDelete = [];
 
@@ -833,17 +641,19 @@ async function init() {
     }
 
     if (messageIdsToDelete.length > 0) {
+      const isMove = settings.defaultAction === "move";
+
       const confirmed = confirm(
-        browser.i18n.getMessage("deleteSelectedConfirm", [
-          String(messageIdsToDelete.length),
-        ])
+        browser.i18n.getMessage(
+          isMove ? "moveSelectedConfirm" : "deleteSelectedConfirm",
+          [String(messageIdsToDelete.length)]
+        )
       );
 
       if (confirmed) {
         await browser.runtime.sendMessage({
-          type: "delete-selected-messages",
+          type: "commit-duplicate-actions",
           messageIds: messageIdsToDelete,
-          deletePermanently: settings.defaultAction === "permanent",
         });
 
         window.close();
