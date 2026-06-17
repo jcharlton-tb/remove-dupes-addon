@@ -115,9 +115,7 @@ async function notifyUser(message) {
   }
 }
 
-// Single entry point for every scan trigger. Silent mode scans, applies the
-// configured action, and reports via a notification; otherwise the review
-// dialog window opens as before.
+// Silent mode scans, applies the configured action, and reports via a notification
 async function launchDuplicateScan(mailTabId) {
   const settings = await preferences.getSettings();
 
@@ -149,6 +147,16 @@ async function launchDuplicateScan(mailTabId) {
   try {
     const originalsForThisScan = await originals.getOriginalsFolders();
     await originals.clearOriginalsFolders();
+
+    //Without an identifying field (Subject / Message-ID / Body) and without an Originals folder to anchor against, the criteria can't tell messages apart
+    // Silent mode auto-deletes so rather than risk deleting unrelated mail with no confirmation, skip and report it
+    const hasIdentifyingCriteria =
+      settings.compareSubject || settings.compareMessageId || settings.compareBody;
+
+    if (!hasIdentifyingCriteria && originalsForThisScan.length === 0) {
+      await notifyUser(browser.i18n.getMessage("weakCriteriaSkipped"));
+      return;
+    }
 
     const result = await scan.scanForDuplicates(selectedFolders, settings, {
       originalsForThisScan,

@@ -17,7 +17,7 @@ export const DEFAULT_SETTINGS = {
     compareBody: false,
   
     stripAndSortAddresses: true,
-    sendTimeResolution: "minute", 
+    sendTimeResolution: "second",
 
     allowMd5IdSubstitute: false,
     assumeEachMissingValueIsUnique: false,
@@ -89,5 +89,3 @@ export const DEFAULT_SETTINGS = {
     },
   ];
 }
-
- // const COMPARISON_MENU_ITEMS = getComparisonMenuItems(DEFAULT_SETTINGS);

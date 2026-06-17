@@ -1,7 +1,7 @@
 import * as folders from "./folders.js";
 import * as comparison from "./comparison.js";
 
-export function buildRowsFromGroups(groupedValues, hasOriginals) {
+export function buildRowsFromGroups(groupedValues, hasOriginals, settings) {
   return groupedValues
     .filter((group) => {
       if (hasOriginals) {
@@ -18,6 +18,42 @@ export function buildRowsFromGroups(groupedValues, hasOriginals) {
           : (index === 0 ? "keep" : "delete"),
       }));
 
+      // When originals are used, keep each original next to the duplicate(s) it corresponds to and lead each pair with the original
+      if (hasOriginals) {
+        const pairKey = (message) =>
+          String(message.messageId || "").trim().toLowerCase() ||
+          `${message.subject}|${message.dateValue}|${message.author}`;
+
+        messages.sort((a, b) => {
+          const keyA = pairKey(a);
+          const keyB = pairKey(b);
+
+          if (keyA !== keyB) {
+            return keyA < keyB ? -1 : 1;
+          }
+
+          return (b.isOriginal === true) - (a.isOriginal === true);
+        });
+      }
+
+      // The header summarises the whole group and uncompared columns and send times that differ are left blank
+      const shared = (pick) => {
+        const first = pick(messages[0]);
+        return messages.every((message) => pick(message) === first);
+      };
+
+      const subjectDisplay =
+        settings.compareSubject && shared((m) => m.subject) ? group.subject : "";
+      const authorDisplay =
+        settings.compareAuthor && shared((m) => m.author) ? group.author : "";
+      
+        // Folder is the exception to the "only show match criteria" rule 
+      const folderDisplay = [
+        ...new Set(messages.map((message) => message.folder).filter(Boolean)),
+      ].join(", ");
+      const dateDisplay =
+        settings.compareSendTime && shared((m) => m.date) ? group.date : "";
+
       return {
         subject: group.subject,
         author: group.author,
@@ -25,6 +61,10 @@ export function buildRowsFromGroups(groupedValues, hasOriginals) {
         date: group.date,
         dateValue: group.dateValue,
         count: group.count,
+        subjectDisplay,
+        authorDisplay,
+        folderDisplay,
+        dateDisplay,
         messageIds: group.messageIds,
         messages,
       };
@@ -38,8 +78,6 @@ function folderLabel(foldersToScan) {
     : `${foldersToScan.length} folders`;
 }
 
-// Expand the user selection (plus any originals folders) into the concrete set
-// of folders to scan, applying the subfolder and special-folder rules.
 export async function collectScanFolders(selectedFolders, originalsForThisScan, settings) {
   const originalFolderKeys = new Set(
     originalsForThisScan.map((folder) => folder.path || folder.name)
@@ -73,9 +111,6 @@ export async function collectScanFolders(selectedFolders, originalsForThisScan, 
   return { foldersToScan, originalFolderKeys };
 }
 
-// Scan the selected folders and return duplicate groups as display-ready rows.
-// Pass options.onProgress to receive partial results during the scan (used by
-// the dialog for progressive rendering); silent mode omits it.
 export async function scanForDuplicates(selectedFolders, settings, options = {}) {
   const { originalsForThisScan = [], onProgress = null } = options;
 
@@ -119,9 +154,6 @@ export async function scanForDuplicates(selectedFolders, settings, options = {})
   for (const folder of foldersToScan) {
     const messages = await folders.getAllMessages(folder);
 
-    // Stamp the known scan folder onto each message. The folder object on a
-    // header from messages.list() may lack the full path, which the originals
-    // match (originalFolderKeys, built from folder.path) relies on.
     for (const message of messages) {
       message.folder = folder;
     }
@@ -175,12 +207,20 @@ export async function scanForDuplicates(selectedFolders, settings, options = {})
       continue;
     }
 
-    if (!item || !item.key) {
+    if (!item) {
       continue;
     }
 
-    if (!groups.has(item.key)) {
-      groups.set(item.key, {
+    let groupKey = item.key;
+    if (!groupKey) {
+      if (!settings.compareBody) {
+        continue;
+      }
+      groupKey = "__body_only__";
+    }
+
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, {
         subject: item.subject,
         author: item.author,
         folder: item.folder,
@@ -193,7 +233,7 @@ export async function scanForDuplicates(selectedFolders, settings, options = {})
       });
     }
 
-    const group = groups.get(item.key);
+    const group = groups.get(groupKey);
     group.count += 1;
     group.messageIds.push(item.id);
     group.messages.push({
@@ -213,8 +253,9 @@ export async function scanForDuplicates(selectedFolders, settings, options = {})
       group.originalCount += 1;
     }
 
-    if (onProgress && group.count > 1 && messageIndex % 25 === 0) {
-      const rows = buildRowsFromGroups([...groups.values()], hasOriginals);
+    // Don't stream partial results when Body is on
+    if (onProgress && !settings.compareBody && group.count > 1 && messageIndex % 25 === 0) {
+      const rows = buildRowsFromGroups([...groups.values()], hasOriginals, settings);
       await onProgress({
         folderName,
         scannedCount: allMessages.length,
@@ -232,7 +273,7 @@ export async function scanForDuplicates(selectedFolders, settings, options = {})
     groupedValues = await comparison.filterGroupsByBody(groupedValues);
   }
 
-  const rows = buildRowsFromGroups(groupedValues, hasOriginals);
+  const rows = buildRowsFromGroups(groupedValues, hasOriginals, settings);
 
   console.log("Duplicate rows", rows.length);
 
