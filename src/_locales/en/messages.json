@@ -1,6 +1,6 @@
 {
   "extensionName": {
-    "message": "Find and Remove Duplicate Messages"
+    "message": "Remove Duplicates"
   },
   "extensionDescription": {
     "message": "Scans for duplicate messages and allows you to remove them."
@@ -107,6 +107,18 @@
   "loadingText": {
     "message": "Scanning folder…"
   },
+  "bodyScanLoading": {
+    "message": "Comparing message bodies… this can take a while for large folders."
+  },
+  "weakCriteriaWarning": {
+    "message": "The comparison criteria you selected can't reliably tell messages apart, so unrelated emails that share those fields may be grouped together — and marked for deletion.\n\nFor accurate results, enable Compare Subject, Message ID, or Body, or set an Originals folder.\n\nScan anyway?"
+  },
+  "scanCancelledMessage": {
+    "message": "Scan cancelled. Enable Compare Subject, Message ID, or Body — or set an Originals folder — to identify true duplicates, then scan again."
+  },
+  "weakCriteriaSkipped": {
+    "message": "Scan skipped — the selected criteria can't identify duplicates. Enable Compare Subject, Message ID, or Body, or set an Originals folder."
+  },
   "subjectColumn": {
     "message": "Subject"
   },
@@ -189,7 +201,10 @@
     "message": "Run duplicate scan"
   },
   "removeDuplicatesMenu": {
-    "message": "Remove Duplicates"
+    "message": "Scan for Duplicates"
+  },
+  "otherCriteriaMenu": {
+    "message": "Other criteria"
   },
   "authorColumn": {
     "message": "Author"

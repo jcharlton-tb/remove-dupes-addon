@@ -10,8 +10,8 @@ window.addEventListener("DOMContentLoaded", () => {
 let data = null;
 let scanFolders = [];
 
-// default sort: highest count first
-let sort = { key: "count", dir: "desc" };
+// default sort: by subject so each original sits next to its duplicates
+let sort = { key: "subject", dir: "asc" };
 
 let renderToken = 0;
 
@@ -56,7 +56,7 @@ function updateDeleteSelectedButton() {
   deleteSelectedBtn.disabled = !hasMessagesToDelete;
 }
 
-function renderRowsChunked(tbody, rows, chunkSize = 1, token) {
+function renderRowsChunked(tbody, rows, columns, token, chunkSize = 1) {
   tbody.textContent = "";
   let i = 0;
 
@@ -74,19 +74,23 @@ function renderRowsChunked(tbody, rows, chunkSize = 1, token) {
 
       const subjectCell = document.createElement("td");
       subjectCell.className = "subject";
-      subjectCell.textContent = r.subject;
+      subjectCell.textContent = r.subjectDisplay;
+      subjectCell.hidden = !columns.visible.subject;
       groupRow.appendChild(subjectCell);
 
       const authorCell = document.createElement("td");
-      authorCell.textContent = r.author;
+      authorCell.textContent = r.authorDisplay;
+      authorCell.hidden = !columns.visible.author;
       groupRow.appendChild(authorCell);
 
       const folderCell = document.createElement("td");
-      folderCell.textContent = r.folder;
+      folderCell.textContent = r.folderDisplay;
+      folderCell.hidden = !columns.visible.folder;
       groupRow.appendChild(folderCell);
 
       const dateCell = document.createElement("td");
-      dateCell.textContent = r.date;
+      dateCell.textContent = r.dateDisplay;
+      dateCell.hidden = !columns.visible.date;
       groupRow.appendChild(dateCell);
 
       const countCell = document.createElement("td");
@@ -102,7 +106,7 @@ function renderRowsChunked(tbody, rows, chunkSize = 1, token) {
         messageRow.dataset.messageId = String(message.id);
 
         const messageCell = document.createElement("td");
-        messageCell.colSpan = 5;
+        messageCell.colSpan = columns.count;
 
         const review = document.createElement("div");
         review.className = "message-review";
@@ -249,6 +253,9 @@ async function render() {
 
   if (!meta || !tbody) return;
 
+  renderToken++;
+  const token = renderToken;
+
   if (!data) {
     meta.textContent = "";
     tbody.textContent = "";
@@ -284,6 +291,27 @@ async function render() {
     if (th) th.classList.toggle("active-criterion", active);
     if (btn) btn.classList.toggle("active-criterion", active);
   });
+
+  const columnVisible = {
+    subject: !!settings.compareSubject,
+    author: !!settings.compareAuthor,
+    folder: true,
+    date: !!settings.compareSendTime,
+    count: true,
+  };
+
+  for (const [key, thId] of [
+    ["subject", "th-subject"],
+    ["author", "th-author"],
+    ["folder", "th-folder"],
+    ["date", "th-date"],
+    ["count", "th-count"],
+  ]) {
+    const th = document.getElementById(thId);
+    if (th) th.hidden = !columnVisible[key];
+  }
+
+  const visibleColumnCount = Object.values(columnVisible).filter(Boolean).length;
 
   const scanSummary = document.getElementById("scan-summary");
   if (scanSummary) {
@@ -324,10 +352,33 @@ async function render() {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
 
-    cell.colSpan = 5;
+    cell.colSpan = visibleColumnCount;
     cell.style.textAlign = "center";
     cell.style.padding = "16px";
     cell.textContent = browser.i18n.getMessage("noFolderSelected");
+
+    row.appendChild(cell);
+    tbody.appendChild(row);
+
+    return;
+  }
+
+  if (data.scanCancelled) {
+    const deleteSelectedBtn = document.getElementById("delete-selected");
+
+    if (deleteSelectedBtn) {
+      deleteSelectedBtn.disabled = true;
+    }
+
+    tbody.textContent = "";
+
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+
+    cell.colSpan = visibleColumnCount;
+    cell.style.textAlign = "center";
+    cell.style.padding = "16px";
+    cell.textContent = browser.i18n.getMessage("scanCancelledMessage");
 
     row.appendChild(cell);
     tbody.appendChild(row);
@@ -347,7 +398,7 @@ async function render() {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
 
-    cell.colSpan = 5;
+    cell.colSpan = visibleColumnCount;
     cell.style.textAlign = "center";
     cell.style.padding = "16px";
     cell.textContent = browser.i18n.getMessage("noCriteriaSelected");
@@ -370,7 +421,7 @@ async function render() {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
 
-    cell.colSpan = 5;
+    cell.colSpan = visibleColumnCount;
     cell.style.textAlign = "center";
     cell.style.padding = "16px";
     cell.textContent = browser.i18n.getMessage("noResults");
@@ -381,9 +432,7 @@ async function render() {
     return;
   }
 
-  renderToken++;
-  const token = renderToken;
-  renderRowsChunked(tbody, rows, 1, token);
+  renderRowsChunked(tbody, rows, { visible: columnVisible, count: visibleColumnCount }, token);
 }
 
 async function runDuplicateScan(selectedFolders) {
@@ -396,7 +445,33 @@ async function runDuplicateScan(selectedFolders) {
   const originalsForThisScan = await originals.getOriginalsFolders();
   await originals.clearOriginalsFolders();
 
+  // Without an identifying field (Subject/message-ID/body) and without an Originals folder to anchor against, the criteria can't tell messages apart
+  // Warning user that limited selected criteria will skew duplicate results, but let the user proceed if they choose to.
+  const hasIdentifyingCriteria =
+    settings.compareSubject || settings.compareMessageId || settings.compareBody;
+
+  if (!hasIdentifyingCriteria && originalsForThisScan.length === 0) {
+    const proceed = window.confirm(browser.i18n.getMessage("weakCriteriaWarning"));
+
+    if (!proceed) {
+      data = {
+        folderName: "",
+        scannedCount: 0,
+        duplicateGroupCount: 0,
+        rows: [],
+        scanCancelled: true,
+        originalsFolderNames: [],
+      };
+      return;
+    }
+  }
+
   data = null;
+
+  // Body scan loading
+  if (settings.compareBody) {
+    setLoading(true, browser.i18n.getMessage("bodyScanLoading"));
+  }
 
   try {
     const result = await scan.scanForDuplicates(selectedFolders, settings, {

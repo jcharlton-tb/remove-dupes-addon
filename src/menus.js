@@ -27,13 +27,28 @@ export async function createToolbarMenus(settings) {
     contexts: ["browser_action"],
   });
 
-  for (const item of TOOLBAR_COMPARISON_ITEMS) {
+  const INLINE_COUNT = 3;
+  let otherCriteriaCreated = false;
+
+  for (const [index, item] of TOOLBAR_COMPARISON_ITEMS.entries()) {
+    const isInline = index < INLINE_COUNT;
+
+    if (!isInline && !otherCriteriaCreated) {
+      browser.menus.create({
+        id: "toolbar-other-criteria",
+        title: browser.i18n.getMessage("otherCriteriaMenu"),
+        contexts: ["browser_action"],
+      });
+      otherCriteriaCreated = true;
+    }
+
     browser.menus.create({
       id: item.id,
       title: browser.i18n.getMessage(item.titleKey),
       type: "checkbox",
       checked: settings[item.key],
       contexts: ["browser_action"],
+      ...(isInline ? {} : { parentId: "toolbar-other-criteria" }),
     });
   }
 }
