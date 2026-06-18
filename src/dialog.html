@@ -83,7 +83,7 @@
       position: sticky;
       top: 0;
       z-index: 2;
-      background: #e9eef6;
+      background: #dce9ff;
       font-weight: 600;
       border-bottom: 2px solid rgba(0, 0, 0, .20);
     }
@@ -146,12 +146,49 @@
     .footer {
       flex: 0 0 auto;
       display: flex;
-      justify-content: flex-end;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
       gap: 12px;
       margin-top: 12px;
       padding-top: 12px;
       border-top: 1px solid rgba(0, 0, 0, .12);
       background: #ffffff;
+    }
+
+    .action-config {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+      font-size: 0.9em;
+    }
+
+    .action-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px 14px;
+    }
+
+    .action-config label {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .action-config select {
+      width: 280px;
+      max-width: 100%;
+    }
+
+    .action-config select[hidden] {
+      display: none;
+    }
+
+    .footer-actions {
+      display: flex;
+      gap: 12px;
     }
 
     wa-button[variant="primary"]::part(base) {
@@ -255,8 +292,8 @@
   <div class="page">
     <div class="header">
       <h1 class="title" data-i18n-content="dialogTitle">Duplicate Scan Results</h1>
-      <p class="meta" id="meta"></p>
       <p class="meta" id="scan-summary"></p>
+      <p class="meta" id="meta"></p>
     </div>
 
     <div id="loading" class="loading">
@@ -323,13 +360,40 @@
     </div>
 
     <div class="footer">
-      <wa-button variant="primary" id="delete-selected" type="button" data-i18n-content="deleteSelected">
-        Delete selected
-      </wa-button>
+      <div class="action-config" id="action-config">
+        <div class="action-row">
+          <strong data-i18n-content="actionLabel">Action:</strong>
 
-      <wa-button variant="primary" id="close" data-i18n-content="close">
-        Close
-      </wa-button>
+          <label>
+            <input type="radio" name="dialog-default-action" value="trash" />
+            <span data-i18n-content="moveToTrash">Move to Trash</span>
+          </label>
+
+          <label>
+            <input type="radio" name="dialog-default-action" value="move" />
+            <span data-i18n-content="moveToFolder">Move to folder</span>
+          </label>
+
+          <label>
+            <input type="radio" name="dialog-default-action" value="permanent" />
+            <span data-i18n-content="deletePermanently">Delete permanently</span>
+          </label>
+        </div>
+
+        <select id="dialog-move-target">
+          <option value="" data-i18n-content="moveTargetFolderNone">(none selected)</option>
+        </select>
+      </div>
+
+      <div class="footer-actions">
+        <wa-button variant="primary" id="delete-selected" type="button" data-i18n-content="deleteSelected">
+          Delete selected
+        </wa-button>
+
+        <wa-button variant="primary" id="close" data-i18n-content="close">
+          Close
+        </wa-button>
+      </div>
     </div>
   </div>
 

@@ -15,9 +15,17 @@ function crc32(buf) {
   return (crc ^ 0xFFFFFFFF) >>> 0;
 }
 
+// Skip OS/editor junk (dotfiles like .DS_Store, macOS AppleDouble ._* files,
+// __MACOSX folders) so they never end up in the packaged add-on — reviewers
+// reject hidden/unused files.
+function isIgnored(name) {
+  return name.startsWith(".") || name === "__MACOSX" || name === "Thumbs.db";
+}
+
 function zip(sources, destFile) {
   const files = [];
   function collect(full, rel) {
+    if (isIgnored(path.basename(full))) return;
     if (fs.statSync(full).isDirectory()) {
       for (const name of fs.readdirSync(full)) collect(path.join(full, name), rel + "/" + name);
     } else {
@@ -106,7 +114,10 @@ function cp(src, dest) {
   const stat = fs.statSync(src);
   if (stat.isDirectory()) {
     fs.mkdirSync(dest, { recursive: true });
-    fs.readdirSync(src).forEach(file => cp(path.join(src, file), path.join(dest, file)));
+    fs.readdirSync(src).forEach(file => {
+      if (isIgnored(file)) return;
+      cp(path.join(src, file), path.join(dest, file));
+    });
   } else {
     fs.copyFileSync(src, dest);
   }

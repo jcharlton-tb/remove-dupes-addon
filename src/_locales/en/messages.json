@@ -26,6 +26,12 @@
   "defaultActionLabel": {
     "message": "Default action for duplicate messages:"
   },
+  "actionLabel": {
+    "message": "Action:"
+  },
+  "moveTargetMissing": {
+    "message": "Choose a destination folder to move the duplicates to."
+  },
   "moveToTrash": {
     "message": "Move to Trash"
   },
@@ -171,7 +177,7 @@
   },
 
   "scanSummary": {
-    "message": "Folder: $folderName$ • Scanned: $scannedCount$ • Duplicate groups: $duplicateGroupCount$",
+    "message": "Folder: $folderName$ • Scanned Messages: $scannedCount$ • Duplicate groups: $duplicateGroupCount$",
     "placeholders": {
       "folderName": {
         "content": "$1"
@@ -216,7 +222,7 @@
     "message": "Date"
   },
   "scanSummaryLabel": {
-    "message": "Comparing:"
+    "message": "Search Criteria:"
   },
   "searchScopeAll": {
     "message": "Scope: All messages"
@@ -241,6 +247,9 @@
   },
   "deleteAction": {
     "message": "Delete"
+  },
+  "moveAction": {
+    "message": "Move"
   },
   "originalMessageLabel": {
     "message": "Original"

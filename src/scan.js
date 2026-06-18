@@ -73,9 +73,8 @@ export function buildRowsFromGroups(groupedValues, hasOriginals, settings) {
 }
 
 function folderLabel(foldersToScan) {
-  return foldersToScan.length === 1
-    ? foldersToScan[0].name
-    : `${foldersToScan.length} folders`;
+  // List the folders being scanned by name rather than a bare count.
+  return foldersToScan.map((folder) => folder.name).join(", ");
 }
 
 export async function collectScanFolders(selectedFolders, originalsForThisScan, settings) {

@@ -2,6 +2,7 @@ import { localizeDocument } from "./vendor/i18n.mjs";
 import * as preferences from "./settings.js";
 import * as originals from "./originals.js";
 import * as scan from "./scan.js";
+import * as folders from "./folders.js";
 
 window.addEventListener("DOMContentLoaded", () => {
   localizeDocument();
@@ -54,6 +55,90 @@ function updateDeleteSelectedButton() {
   );
 
   deleteSelectedBtn.disabled = !hasMessagesToDelete;
+}
+
+function updateCommitButtonLabel(defaultAction) {
+  const deleteSelectedBtn = document.getElementById("delete-selected");
+  if (!deleteSelectedBtn) return;
+
+  deleteSelectedBtn.textContent =
+    defaultAction === "move"
+      ? browser.i18n.getMessage("moveSelected") || "Move selected"
+      : browser.i18n.getMessage("deleteSelected") || "Delete selected";
+}
+
+// Wire the footer Action chooser (Move to Trash / Move to folder / Delete
+// permanently) to the shared settings, so it stays in sync with the Options
+// page and drives what the commit button does.
+async function setupActionConfig() {
+  const container = document.getElementById("action-config");
+  if (!container) return;
+
+  const settings = await preferences.getSettings();
+  const select = document.getElementById("dialog-move-target");
+
+  if (select) {
+    while (select.options.length > 1) {
+      select.remove(1);
+    }
+
+    const entries = await folders.listAllFolders();
+    for (const entry of entries) {
+      const option = document.createElement("option");
+      option.value = JSON.stringify({
+        accountId: entry.accountId,
+        path: entry.path,
+        name: entry.name,
+      });
+      option.textContent = entry.label;
+      select.appendChild(option);
+    }
+
+    const target = settings.moveTargetFolder;
+    if (target && target.path) {
+      for (const option of select.options) {
+        if (!option.value) continue;
+        try {
+          const parsed = JSON.parse(option.value);
+          if (parsed.accountId === target.accountId && parsed.path === target.path) {
+            select.value = option.value;
+            break;
+          }
+        } catch (error) {
+          // ignore malformed option values
+        }
+      }
+    }
+
+    select.hidden = settings.defaultAction !== "move";
+
+    select.addEventListener("change", async () => {
+      let moveTargetFolder = null;
+      if (select.value) {
+        try {
+          moveTargetFolder = JSON.parse(select.value);
+        } catch (error) {
+          moveTargetFolder = null;
+        }
+      }
+      await preferences.saveSettings({ moveTargetFolder });
+    });
+  }
+
+  for (const radio of container.querySelectorAll('input[name="dialog-default-action"]')) {
+    radio.checked = radio.value === settings.defaultAction;
+
+    radio.addEventListener("change", async () => {
+      if (!radio.checked) return;
+      await preferences.saveSettings({ defaultAction: radio.value });
+      if (select) select.hidden = radio.value !== "move";
+      updateCommitButtonLabel(radio.value);
+      // Re-render so the per-message radios relabel (Delete <-> Move).
+      await render();
+    });
+  }
+
+  updateCommitButtonLabel(settings.defaultAction);
 }
 
 function renderRowsChunked(tbody, rows, columns, token, chunkSize = 1) {
@@ -130,7 +215,7 @@ function renderRowsChunked(tbody, rows, columns, token, chunkSize = 1) {
         deleteInput.value = "delete";
         deleteInput.checked = message.action === "delete";
         deleteLabel.appendChild(deleteInput);
-        deleteLabel.append(` ${browser.i18n.getMessage("deleteAction")}`);
+        deleteLabel.append(` ${columns.deleteLabel}`);
 
         actions.appendChild(keepLabel);
         actions.appendChild(deleteLabel);
@@ -295,7 +380,7 @@ async function render() {
   const columnVisible = {
     subject: !!settings.compareSubject,
     author: !!settings.compareAuthor,
-    folder: true,
+    folder: !!settings.compareFolder,
     date: !!settings.compareSendTime,
     count: true,
   };
@@ -313,6 +398,13 @@ async function render() {
 
   const visibleColumnCount = Object.values(columnVisible).filter(Boolean).length;
 
+  // The per-message "delete" radio reflects the configured action: messages are
+  // moved (not deleted) when the action is "move to folder".
+  const deleteActionLabel =
+    settings.defaultAction === "move"
+      ? browser.i18n.getMessage("moveAction") || "Move"
+      : browser.i18n.getMessage("deleteAction") || "Delete";
+
   const scanSummary = document.getElementById("scan-summary");
   if (scanSummary) {
     const enabled = [];
@@ -322,13 +414,13 @@ async function render() {
     if (settings.compareFolder) enabled.push(browser.i18n.getMessage("folderColumn"));
     if (settings.compareSendTime) enabled.push(browser.i18n.getMessage("dateColumn"));
 
-    const scope =
-      settings.searchScope === "unread"
-        ? browser.i18n.getMessage("searchScopeUnread")
-        : browser.i18n.getMessage("searchScopeAll");
-
     let summaryText =
-      `${browser.i18n.getMessage("scanSummaryLabel")} ${enabled.join(", ")} • ${scope}`;
+      `${browser.i18n.getMessage("scanSummaryLabel")} ${enabled.join(", ")}`;
+
+    // Only surface the scope when it isn't the default ("all messages").
+    if (settings.searchScope && settings.searchScope !== "all") {
+      summaryText += ` • ${browser.i18n.getMessage("searchScopeUnread")}`;
+    }
 
     if (Array.isArray(data.originalsFolderNames) && data.originalsFolderNames.length > 0) {
       summaryText += ` • ${browser.i18n.getMessage(
@@ -432,7 +524,12 @@ async function render() {
     return;
   }
 
-  renderRowsChunked(tbody, rows, { visible: columnVisible, count: visibleColumnCount }, token);
+  renderRowsChunked(
+    tbody,
+    rows,
+    { visible: columnVisible, count: visibleColumnCount, deleteLabel: deleteActionLabel },
+    token
+  );
 }
 
 async function runDuplicateScan(selectedFolders) {
@@ -612,6 +709,8 @@ async function init() {
 
   await render();
 
+  await setupActionConfig();
+
   const closeBtn = document.getElementById("close");
   if (closeBtn) {
     closeBtn.addEventListener("click", () => {
@@ -641,6 +740,11 @@ async function init() {
 
       const settings = await preferences.getSettings();
       const isMove = settings.defaultAction === "move";
+
+      if (isMove && !settings.moveTargetFolder) {
+        alert(browser.i18n.getMessage("moveTargetMissing"));
+        return;
+      }
 
       const confirmed = confirm(
         browser.i18n.getMessage(
@@ -718,21 +822,27 @@ async function init() {
     if (messageIdsToDelete.length > 0) {
       const isMove = settings.defaultAction === "move";
 
-      const confirmed = confirm(
-        browser.i18n.getMessage(
-          isMove ? "moveSelectedConfirm" : "deleteSelectedConfirm",
-          [String(messageIdsToDelete.length)]
-        )
-      );
+      // Can't auto-move without a destination — fall through to manual review
+      // (with the Action chooser visible) instead of failing the commit.
+      if (isMove && !settings.moveTargetFolder) {
+        alert(browser.i18n.getMessage("moveTargetMissing"));
+      } else {
+        const confirmed = confirm(
+          browser.i18n.getMessage(
+            isMove ? "moveSelectedConfirm" : "deleteSelectedConfirm",
+            [String(messageIdsToDelete.length)]
+          )
+        );
 
-      if (confirmed) {
-        await browser.runtime.sendMessage({
-          type: "commit-duplicate-actions",
-          messageIds: messageIdsToDelete,
-        });
+        if (confirmed) {
+          await browser.runtime.sendMessage({
+            type: "commit-duplicate-actions",
+            messageIds: messageIdsToDelete,
+          });
 
-        window.close();
-        return;
+          window.close();
+          return;
+        }
       }
     }
   }
