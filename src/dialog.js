@@ -10,6 +10,8 @@ window.addEventListener("DOMContentLoaded", () => {
 
 let data = null;
 let scanFolders = [];
+let selectedAction = "trash";
+let selectedMoveTarget = null;
 
 // default sort: by subject so each original sits next to its duplicates
 let sort = { key: "subject", dir: "asc" };
@@ -57,24 +59,45 @@ function updateDeleteSelectedButton() {
   deleteSelectedBtn.disabled = !hasMessagesToDelete;
 }
 
+function actionLabelSet(defaultAction) {
+  if (defaultAction === "move") {
+    return {
+      commit: browser.i18n.getMessage("moveSelected") || "Move selected",
+      row: browser.i18n.getMessage("moveAction") || "Move",
+      confirmKey: "moveSelectedConfirm",
+    };
+  }
+
+  if (defaultAction === "permanent") {
+    return {
+      commit: browser.i18n.getMessage("deleteSelected") || "Delete selected",
+      row: browser.i18n.getMessage("deleteAction") || "Delete",
+      confirmKey: "deleteSelectedConfirm",
+    };
+  }
+
+  return {
+    commit: browser.i18n.getMessage("moveToTrash") || "Move to Trash",
+    row: browser.i18n.getMessage("moveToTrash") || "Move to Trash",
+    confirmKey: "trashSelectedConfirm",
+  };
+}
+
 function updateCommitButtonLabel(defaultAction) {
   const deleteSelectedBtn = document.getElementById("delete-selected");
   if (!deleteSelectedBtn) return;
 
-  deleteSelectedBtn.textContent =
-    defaultAction === "move"
-      ? browser.i18n.getMessage("moveSelected") || "Move selected"
-      : browser.i18n.getMessage("deleteSelected") || "Delete selected";
+  deleteSelectedBtn.textContent = actionLabelSet(defaultAction).commit;
 }
 
-// Wire the footer Action chooser (Move to Trash / Move to folder / Delete
-// permanently) to the shared settings, so it stays in sync with the Options
-// page and drives what the commit button does.
 async function setupActionConfig() {
   const container = document.getElementById("action-config");
   if (!container) return;
 
   const settings = await preferences.getSettings();
+  selectedAction = settings.defaultAction || "trash";
+  selectedMoveTarget = settings.moveTargetFolder || null;
+
   const select = document.getElementById("dialog-move-target");
 
   if (select) {
@@ -82,25 +105,31 @@ async function setupActionConfig() {
       select.remove(1);
     }
 
-    const entries = await folders.listAllFolders();
-    for (const entry of entries) {
-      const option = document.createElement("option");
-      option.value = JSON.stringify({
-        accountId: entry.accountId,
-        path: entry.path,
-        name: entry.name,
-      });
-      option.textContent = entry.label;
-      select.appendChild(option);
+    try {
+      const entries = await folders.listAllFolders();
+      for (const entry of entries) {
+        const option = document.createElement("option");
+        option.value = JSON.stringify({
+          accountId: entry.accountId,
+          path: entry.path,
+          name: entry.name,
+        });
+        option.textContent = entry.label;
+        select.appendChild(option);
+      }
+    } catch (err) {
+      console.error("Failed to list folders for the move target:", err);
     }
 
-    const target = settings.moveTargetFolder;
-    if (target && target.path) {
+    if (selectedMoveTarget && selectedMoveTarget.path) {
       for (const option of select.options) {
         if (!option.value) continue;
         try {
           const parsed = JSON.parse(option.value);
-          if (parsed.accountId === target.accountId && parsed.path === target.path) {
+          if (
+            parsed.accountId === selectedMoveTarget.accountId &&
+            parsed.path === selectedMoveTarget.path
+          ) {
             select.value = option.value;
             break;
           }
@@ -110,35 +139,34 @@ async function setupActionConfig() {
       }
     }
 
-    select.hidden = settings.defaultAction !== "move";
+    select.classList.toggle("is-hidden", selectedAction !== "move");
 
-    select.addEventListener("change", async () => {
-      let moveTargetFolder = null;
+    select.addEventListener("change", () => {
+      selectedMoveTarget = null;
       if (select.value) {
         try {
-          moveTargetFolder = JSON.parse(select.value);
+          selectedMoveTarget = JSON.parse(select.value);
         } catch (error) {
-          moveTargetFolder = null;
+          selectedMoveTarget = null;
         }
       }
-      await preferences.saveSettings({ moveTargetFolder });
     });
   }
 
   for (const radio of container.querySelectorAll('input[name="dialog-default-action"]')) {
-    radio.checked = radio.value === settings.defaultAction;
+    radio.checked = radio.value === selectedAction;
 
     radio.addEventListener("change", async () => {
       if (!radio.checked) return;
-      await preferences.saveSettings({ defaultAction: radio.value });
-      if (select) select.hidden = radio.value !== "move";
-      updateCommitButtonLabel(radio.value);
-      // Re-render so the per-message radios relabel (Delete <-> Move).
+      selectedAction = radio.value;
+      if (select) select.classList.toggle("is-hidden", selectedAction !== "move");
+      updateCommitButtonLabel(selectedAction);
+      // Re-render so the per-message radios relabel (Move to Trash / Move / Delete).
       await render();
     });
   }
 
-  updateCommitButtonLabel(settings.defaultAction);
+  updateCommitButtonLabel(selectedAction);
 }
 
 function renderRowsChunked(tbody, rows, columns, token, chunkSize = 1) {
@@ -199,6 +227,9 @@ function renderRowsChunked(tbody, rows, columns, token, chunkSize = 1) {
         const actions = document.createElement("div");
         actions.className = "message-actions";
 
+        const choices = document.createElement("div");
+        choices.className = "message-action-choices";
+
         const keepLabel = document.createElement("label");
         const keepInput = document.createElement("input");
         keepInput.type = "radio";
@@ -217,8 +248,9 @@ function renderRowsChunked(tbody, rows, columns, token, chunkSize = 1) {
         deleteLabel.appendChild(deleteInput);
         deleteLabel.append(` ${columns.deleteLabel}`);
 
-        actions.appendChild(keepLabel);
-        actions.appendChild(deleteLabel);
+        choices.appendChild(keepLabel);
+        choices.appendChild(deleteLabel);
+        actions.appendChild(choices);
 
         const previewBtn = document.createElement("button");
         previewBtn.type = "button";
@@ -398,12 +430,7 @@ async function render() {
 
   const visibleColumnCount = Object.values(columnVisible).filter(Boolean).length;
 
-  // The per-message "delete" radio reflects the configured action: messages are
-  // moved (not deleted) when the action is "move to folder".
-  const deleteActionLabel =
-    settings.defaultAction === "move"
-      ? browser.i18n.getMessage("moveAction") || "Move"
-      : browser.i18n.getMessage("deleteAction") || "Delete";
+  const deleteActionLabel = actionLabelSet(selectedAction).row;
 
   const scanSummary = document.getElementById("scan-summary");
   if (scanSummary) {
@@ -709,8 +736,6 @@ async function init() {
 
   await render();
 
-  await setupActionConfig();
-
   const closeBtn = document.getElementById("close");
   if (closeBtn) {
     closeBtn.addEventListener("click", () => {
@@ -738,17 +763,16 @@ async function init() {
         return;
       }
 
-      const settings = await preferences.getSettings();
-      const isMove = settings.defaultAction === "move";
+      const isMove = selectedAction === "move";
 
-      if (isMove && !settings.moveTargetFolder) {
+      if (isMove && !selectedMoveTarget) {
         alert(browser.i18n.getMessage("moveTargetMissing"));
         return;
       }
 
       const confirmed = confirm(
         browser.i18n.getMessage(
-          isMove ? "moveSelectedConfirm" : "deleteSelectedConfirm",
+          actionLabelSet(selectedAction).confirmKey,
           [String(messageIdsToDelete.length)]
         )
       );
@@ -760,6 +784,8 @@ async function init() {
       await browser.runtime.sendMessage({
         type: "commit-duplicate-actions",
         messageIds: messageIdsToDelete,
+        action: selectedAction,
+        moveTargetFolder: selectedMoveTarget,
       });
 
       for (const row of data?.rows || []) {
@@ -797,16 +823,14 @@ async function init() {
     return;
   }
 
+  // Seed the per-scan action from the saved default before scanning 
+  const seedSettings = await preferences.getSettings();
+  selectedAction = seedSettings.defaultAction || "trash";
+  selectedMoveTarget = seedSettings.moveTargetFolder || null;
+
   await runDuplicateScan(scanFolders);
 
   const settings = await preferences.getSettings();
-
-  if (settings.defaultAction === "move") {
-    const deleteSelectedBtn = document.getElementById("delete-selected");
-    if (deleteSelectedBtn) {
-      deleteSelectedBtn.textContent = browser.i18n.getMessage("moveSelected") || "Move selected";
-    }
-  }
 
   if (!settings.reviewBeforeDeletion && data?.rows?.length > 0) {
     const messageIdsToDelete = [];
@@ -820,16 +844,13 @@ async function init() {
     }
 
     if (messageIdsToDelete.length > 0) {
-      const isMove = settings.defaultAction === "move";
-
-      // Can't auto-move without a destination — fall through to manual review
-      // (with the Action chooser visible) instead of failing the commit.
-      if (isMove && !settings.moveTargetFolder) {
+      const isMove = selectedAction === "move";
+      if (isMove && !selectedMoveTarget) {
         alert(browser.i18n.getMessage("moveTargetMissing"));
       } else {
         const confirmed = confirm(
           browser.i18n.getMessage(
-            isMove ? "moveSelectedConfirm" : "deleteSelectedConfirm",
+            actionLabelSet(selectedAction).confirmKey,
             [String(messageIdsToDelete.length)]
           )
         );
@@ -838,6 +859,8 @@ async function init() {
           await browser.runtime.sendMessage({
             type: "commit-duplicate-actions",
             messageIds: messageIdsToDelete,
+            action: selectedAction,
+            moveTargetFolder: selectedMoveTarget,
           });
 
           window.close();
@@ -860,6 +883,13 @@ async function init() {
   }
 
   updateDeleteSelectedButton();
+
+  // Populate and wire the footer Action chooser after the scan
+  try {
+    await setupActionConfig();
+  } catch (err) {
+    console.error("Action config setup failed:", err);
+  }
 }
 
 init().catch((err) => {

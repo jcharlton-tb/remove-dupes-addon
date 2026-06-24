@@ -79,7 +79,7 @@ let lastScanError = null;
 let currentScanFolderName = null;
 
 
-async function applyDuplicateAction(messageIds) {
+async function applyDuplicateAction(messageIds, options = {}) {
   const ids = Array.isArray(messageIds) ? messageIds : [];
 
   if (ids.length === 0) {
@@ -87,16 +87,18 @@ async function applyDuplicateAction(messageIds) {
   }
 
   const settings = await preferences.getSettings();
+  const action = options.action || settings.defaultAction;
+  const moveTargetFolder = options.moveTargetFolder || settings.moveTargetFolder;
 
-  if (settings.defaultAction === "move") {
-    if (!settings.moveTargetFolder) {
-      throw new Error("Move target folder is not configured");
+  if (action === "move") {
+    if (!moveTargetFolder) {
+      throw new Error(browser.i18n.getMessage("moveTargetMissing"));
     }
 
-    await browser.messages.move(ids, settings.moveTargetFolder);
+    await browser.messages.move(ids, moveTargetFolder);
   } else {
     await browser.messages.delete(ids, {
-      deletePermanently: settings.defaultAction === "permanent",
+      deletePermanently: action === "permanent",
     });
   }
 
@@ -148,7 +150,7 @@ async function launchDuplicateScan(mailTabId) {
     const originalsForThisScan = await originals.getOriginalsFolders();
     await originals.clearOriginalsFolders();
 
-    //Without an identifying field (Subject / Message-ID / Body) and without an Originals folder to anchor against, the criteria can't tell messages apart
+    // Without an identifying field (Subject / Message-ID / Body) and without an Originals folder to anchor against, the criteria can't tell messages apart
     // Silent mode auto-deletes so rather than risk deleting unrelated mail with no confirmation, skip and report it
     const hasIdentifyingCriteria =
       settings.compareSubject || settings.compareMessageId || settings.compareBody;
@@ -207,7 +209,10 @@ browser.runtime.onMessage.addListener((msg) => {
   }
 
   if (msg && msg.type === "commit-duplicate-actions") {
-    return applyDuplicateAction(msg.messageIds);
+    return applyDuplicateAction(msg.messageIds, {
+      action: msg.action,
+      moveTargetFolder: msg.moveTargetFolder,
+    });
   }
 
   if (msg && msg.type === "preview-message") {

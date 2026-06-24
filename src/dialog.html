@@ -182,8 +182,8 @@
       max-width: 100%;
     }
 
-    .action-config select[hidden] {
-      display: none;
+    .action-config select.is-hidden {
+      visibility: hidden;
     }
 
     .footer-actions {
@@ -262,11 +262,18 @@
     }
 
     .message-actions {
-      flex: 0 0 150px;
+      flex: 0 0 auto;
       display: flex;
-      flex-wrap: wrap;
-      gap: 8px 12px;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .message-action-choices {
+      display: flex;
       align-items: center;
+      gap: 12px;
+      white-space: nowrap;
     }
 
     .message-meta {
@@ -331,19 +338,19 @@
             </th>
 
             <th id="th-author">
-              <wa-button variant="text" size="small" id="sort-author">
+              <wa-button variant="text" size="small" id="sort-author" data-i18n-content="authorColumn">
                 Author
               </wa-button>
             </th>
 
             <th id="th-folder">
-              <wa-button variant="text" size="small" id="sort-folder">
+              <wa-button variant="text" size="small" id="sort-folder" data-i18n-content="folderColumn">
                 Folder
               </wa-button>
             </th>
 
             <th id="th-date">
-              <wa-button variant="text" size="small" id="sort-date">
+              <wa-button variant="text" size="small" id="sort-date" data-i18n-content="dateColumn">
                 Date
               </wa-button>
             </th>
